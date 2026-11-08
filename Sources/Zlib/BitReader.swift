@@ -48,10 +48,10 @@ struct BitReader: ~Copyable, ~Escapable {
 
       if bitCount >= 7 {
         switch (bitCount, code) {
-        case (8, 198...199): throw .forbiddenSymbol
         case (7, 0...23): return 256 + code
         case (8, 48...191): return code - 48
         case (8, 192...197): return 280 + code - 192
+        case (8, 198...199): throw .forbiddenSymbol
         case (9, 400...511): return 144 + code - 400
         default: continue
         }

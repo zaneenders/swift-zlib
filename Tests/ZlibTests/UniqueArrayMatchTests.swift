@@ -6,7 +6,7 @@ import Testing
 func uniqueArrayMatchesAgreeWithArrayReference(distance: Int, length: Int) throws {
   let seed = Array("ABCD".utf8)
   var reference = LZ77Output()
-  var output = UniqueArray<UInt8>(capacity: seed.count + length)
+  var output = UniqueArray<UInt8>(capacity: seed.count)
   for byte in seed {
     try reference.appendLiteral(byte)
     output.append(byte)
@@ -23,12 +23,11 @@ func uniqueArrayMatchesAgreeWithArrayReference(distance: Int, length: Int) throw
   }
 }
 
-@Test func uniqueArrayMatchWorksAfterGrowingTheAllocation() throws {
+@Test func uniqueArrayMatchGrowsWhileExpandingAnOverlappingMatch() throws {
   var output = UniqueArray<UInt8>(capacity: 2)
   output.append(0x41)
   output.append(0x42)
 
-  output.reserveCapacity(7)
   try output.appendMatch(distance: 2, length: 5)
 
   let expected = Array("ABABABA".utf8)
@@ -83,19 +82,22 @@ func uniqueArrayMatchRejectsNegativeLength(length: Int) throws {
   #expect(view[0] == 0x41)
 }
 
-@Test(arguments: [5, Int.max])
-func uniqueArrayMatchRejectsInsufficientCapacityBeforeWriting(length: Int) throws {
-  var output = UniqueArray<UInt8>(capacity: 6)
+@Test(arguments: [5, 258, 65_536])
+func uniqueArrayMatchPreservesItsPatternAcrossMultipleGrowths(length: Int) throws {
+  var output = UniqueArray<UInt8>(capacity: 2)
   output.append(0x41)
   output.append(0x42)
 
-  #expect(throws: MatchOutputError.capacityExceeded) {
-    try output.appendMatch(distance: 2, length: length)
-  }
+  try output.appendMatch(distance: 2, length: length)
 
-  #expect(output.count == 2)
   let view = output.span
-  try #require(view.count == 2)
-  #expect(view[0] == 0x41)
-  #expect(view[1] == 0x42)
+  try #require(view.count == length + 2)
+  var patternIsPreserved = true
+  for index in 0..<(length + 2) {
+    if view[index] != (index.isMultiple(of: 2) ? 0x41 : 0x42) {
+      patternIsPreserved = false
+      break
+    }
+  }
+  #expect(patternIsPreserved)
 }
