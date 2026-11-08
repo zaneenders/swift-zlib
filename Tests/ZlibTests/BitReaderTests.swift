@@ -128,3 +128,70 @@ func bitReaderRejectsInvalidWidths(bitCount: Int) throws {
   #expect(reader.byteOffset == originalByteOffset)
   #expect(reader.bitOffset == originalBitOffset)
 }
+
+@Test(arguments: 1...7, [0, 1])
+func bitReaderAlignmentDiscardsRemainingBits(bitCount: Int, completedBytes: Int) throws {
+  let input: [UInt8] = Array(repeating: 0xA5, count: completedBytes) + [0xFF, 0x69, 0xAB]
+  var reader = BitReader(input.span.bytes)
+  _ = try reader.readBits(completedBytes * 8 + bitCount)
+
+  reader.alignToByte()
+
+  #expect(reader.byteOffset == completedBytes + 1)
+  #expect(reader.bitOffset == 0)
+  #expect(try reader.readBits(16) == 0xAB69)
+}
+
+@Test(arguments: [0, 1])
+func bitReaderAlignmentPreservesAnAlignedPosition(completedBytes: Int) throws {
+  let input: [UInt8] = [0x12, 0x34]
+  var reader = BitReader(input.span.bytes)
+  _ = try reader.readBits(completedBytes * 8)
+
+  reader.alignToByte()
+
+  #expect(reader.byteOffset == completedBytes)
+  #expect(reader.bitOffset == 0)
+  #expect(try reader.readBits(8) == UInt32(input[completedBytes]))
+}
+
+@Test func bitReaderAlignmentIsIdempotent() throws {
+  let input: [UInt8] = [0xFF, 0x69]
+  var reader = BitReader(input.span.bytes)
+  _ = try reader.readBits(3)
+
+  reader.alignToByte()
+  reader.alignToByte()
+
+  #expect(reader.byteOffset == 1)
+  #expect(reader.bitOffset == 0)
+  #expect(try reader.readBits(8) == 0x69)
+}
+
+@Test func bitReaderCanAlignEmptyInput() {
+  let input: [UInt8] = []
+  var reader = BitReader(input.span.bytes)
+
+  reader.alignToByte()
+
+  #expect(reader.byteOffset == 0)
+  #expect(reader.bitOffset == 0)
+  #expect(throws: BitReaderError.unexpectedEndOfInput) {
+    try reader.readBits(1)
+  }
+}
+
+@Test(arguments: 1...8)
+func bitReaderCanAlignAtEndOfInput(bitCount: Int) throws {
+  let input: [UInt8] = [0xFF]
+  var reader = BitReader(input.span.bytes)
+  _ = try reader.readBits(bitCount)
+
+  reader.alignToByte()
+
+  #expect(reader.byteOffset == 1)
+  #expect(reader.bitOffset == 0)
+  #expect(throws: BitReaderError.unexpectedEndOfInput) {
+    try reader.readBits(1)
+  }
+}

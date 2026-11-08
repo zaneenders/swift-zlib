@@ -7,7 +7,7 @@ struct PendingMatch: ~Copyable, ~Sendable {
 
   init(distance: Int, length: Int) {
     self.distance = distance
-    remaining = length
+    self.remaining = length
   }
 
   /// Emits as many bytes as will fit, returning the number added during this call.

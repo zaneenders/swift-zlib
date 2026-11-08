@@ -150,17 +150,17 @@ func pendingMatchRejectsUnavailableDistanceWithoutWriting(distance: Int) throws 
     history.appendLiteral(byte)
   }
   var match = PendingMatch(distance: distance, length: 3)
-  var output = OwnedBytes(capacity: 3)
-  try output.append(0x58)
+  var output = UniqueArray<UInt8>(capacity: 3)
+  output.append(0x58)
 
   #expect(throws: HistoryWindowError.invalidDistance) {
-    try output.withOutputSpan { span in
+    try output.edit { span in
       try match.emit(into: &span, history: &history)
     }
   }
 
   #expect(output.count == 1)
-  #expect(output.readSpan()[0] == 0x58)
+  #expect(output.span[0] == 0x58)
   #expect(match.remaining == 3)
   #expect(history.count == 2)
   #expect(history.writeIndex == 2)
