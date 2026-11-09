@@ -382,3 +382,120 @@ func bitWriterWritesStoredLengthAndComplement(
 
   try expectBitWriterBytes(output, testCase.expected)
 }
+
+// Fixed codes from RFC 1951, section 3.2.6; each expected output is zero-padded.
+@Test(arguments: [
+  (UInt32(0), [UInt8(0x0C)]),
+  (UInt32(1), [UInt8(0x8C)]),
+  (UInt32(65), [UInt8(0x8E)]),
+  (UInt32(143), [UInt8(0xFD)]),
+  (UInt32(144), [UInt8(0x13), 0x00]),
+  (UInt32(145), [UInt8(0x13), 0x01]),
+  (UInt32(255), [UInt8(0xFF), 0x01]),
+  (UInt32(256), [UInt8(0x00)]),
+  (UInt32(257), [UInt8(0x40)]),
+  (UInt32(279), [UInt8(0x74)]),
+  (UInt32(280), [UInt8(0x03)]),
+  (UInt32(281), [UInt8(0x83)]),
+  (UInt32(285), [UInt8(0xA3)])
+] as [(symbol: UInt32, expected: [UInt8])])
+func bitWriterWritesExactFixedHuffmanSymbolBytes(
+  testCase: (symbol: UInt32, expected: [UInt8])
+) throws {
+  var writer = BitWriter(minimumCapacity: 0)
+
+  try writer.writeFixedLiteralLengthSymbol(testCase.symbol)
+  let output = writer.finish()
+
+  try expectBitWriterBytes(output, testCase.expected)
+}
+
+@Test(
+  arguments: 0...7,
+  [
+    (UInt32(65), UInt32(0x8E), 8),
+    (UInt32(145), UInt32(0x113), 9),
+    (UInt32(257), UInt32(0x40), 7),
+    (UInt32(285), UInt32(0xA3), 8)
+  ]
+)
+func bitWriterFixedHuffmanSymbolsPreserveAdjacentFieldsAtEveryBitOffset(
+  bitOffset: Int,
+  testCase: (symbol: UInt32, packedCode: UInt32, bitCount: Int)
+) throws {
+  var writer = BitWriter(minimumCapacity: 0)
+
+  writer.writeBits(0xFF, count: bitOffset)
+  try writer.writeFixedLiteralLengthSymbol(testCase.symbol)
+  writer.writeBits(0b101, count: 3)
+  let output = writer.finish()
+
+  let prefix = (UInt32(1) << bitOffset) - 1
+  let packed = prefix | (testCase.packedCode << bitOffset)
+    | (UInt32(0b101) << (bitOffset + testCase.bitCount))
+  let byteCount = (bitOffset + testCase.bitCount + 3 + 7) / 8
+  let expected = (0..<byteCount).map { UInt8(truncatingIfNeeded: packed >> ($0 * 8)) }
+  try expectBitWriterBytes(output, expected)
+}
+
+@Test func bitWriterWritesEveryFixedHuffmanSymbolWithoutPaddingBetweenSymbols() throws {
+  var writer = BitWriter(minimumCapacity: 1)
+  for symbol: UInt32 in 0...285 {
+    try writer.writeFixedLiteralLengthSymbol(symbol)
+  }
+  let output = writer.finish()
+
+  // All 286 valid symbols occupy exactly 2,376 bits, or 297 bytes.
+  #expect(output.count == 297)
+  var reader = BitReader(output.span.bytes)
+  for symbol: UInt32 in 0...285 {
+    #expect(try reader.readFixedLiteralLengthSymbol() == symbol, "Symbol \(symbol)")
+  }
+  #expect(reader.byteOffset == 297)
+  #expect(reader.bitOffset == 0)
+}
+
+@Test(arguments: [UInt32(286), 287, 288, 511, 0xFFFF, .max], [0, 3, 8])
+func bitWriterRejectsInvalidFixedHuffmanSymbolsWithoutChangingOutput(
+  symbol: UInt32, prefixLength: Int
+) throws {
+  var writer = BitWriter(minimumCapacity: 0)
+  let bits: [UInt8] = [0, 1, 1, 0, 1, 1, 0, 1]
+  for bit in bits.prefix(prefixLength) {
+    try writer.writeBit(bit)
+  }
+
+  #expect(throws: BitWriterError.reserved) {
+    try writer.writeFixedLiteralLengthSymbol(symbol)
+  }
+
+  for bit in bits.dropFirst(prefixLength) {
+    try writer.writeBit(bit)
+  }
+  try writer.writeFixedLiteralLengthSymbol(65)
+  let output = writer.finish()
+
+  try expectBitWriterBytes(output, [0xB6, 0x8E])
+}
+
+// These complete block fixtures were independently checked with C zlib;
+// they also appear in inflateDecodesFixedHuffmanLiterals.
+@Test(arguments: [
+  ([UInt8](), [UInt8(0x03), 0x00]),
+  ([UInt8(0x41)], [UInt8(0x73), 0x04, 0x00]),
+  ([UInt8(0x00), 0x8F, 0x90, 0xFF], [UInt8(0x63), 0xE8, 0x9F, 0xF0, 0x1F, 0x00])
+])
+func bitWriterBuildsKnownFixedHuffmanBlockFixtures(
+  testCase: (literals: [UInt8], expected: [UInt8])
+) throws {
+  var writer = BitWriter(minimumCapacity: 0)
+
+  writer.writeBits(0b011, count: 3)  // Final block, fixed Huffman coding.
+  for literal in testCase.literals {
+    try writer.writeFixedLiteralLengthSymbol(UInt32(literal))
+  }
+  try writer.writeFixedLiteralLengthSymbol(256)
+  let output = writer.finish()
+
+  try expectBitWriterBytes(output, testCase.expected)
+}

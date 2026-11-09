@@ -14,6 +14,33 @@ struct BitWriter: ~Copyable {
     writeBits(bit, count: 1)
   }
 
+  mutating func writeFixedLiteralLengthSymbol(_ symbol: UInt32) throws(BitWriterError) {
+    let code: UInt32
+    let bitCount: UInt8
+
+    switch symbol {
+    case 0...143:
+      bitCount = 8
+      code = 0b00110000 + symbol
+    case 144...255:
+      bitCount = 9
+      code = 0b110010000 + (symbol - 144)
+    case 256...279:
+      bitCount = 7
+      code = symbol - 256
+    case 280...285:
+      bitCount = 8
+      code = 0b11000000 + (symbol - 280)
+    default:
+      throw BitWriterError.reserved
+    }
+
+    for index in (0..<bitCount).reversed() {
+      let bit = UInt8((code >> index) & 1)
+      writeBits(bit, count: 1)
+    }
+  }
+
   mutating func writeBits(_ bits: UInt8, count: Int) {
     var bits = bits
     for _ in 0..<count {
@@ -54,4 +81,5 @@ struct BitWriter: ~Copyable {
 public enum BitWriterError: Error {
   case inputToLong
   case invalidBit
+  case reserved
 }

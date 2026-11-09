@@ -21,7 +21,23 @@ private func expectDeflateBytes(
 func deflateEncodesExactStoredBlockFixtures(
   testCase: (input: [UInt8], expected: [UInt8])
 ) throws {
-  let output = try ZLib.deflate(input: testCase.input.span)
+  let output = try ZLib.deflate(input: testCase.input.span, strategy: .stored)
+
+  try expectDeflateBytes(output, testCase.expected)
+}
+
+// Exact raw DEFLATE fixtures checked independently with C zlib's Z_FIXED strategy.
+@Test(
+  arguments: [
+    ([], [0x03, 0x00]),
+    ([0x41], [0x73, 0x04, 0x00]),
+    ([0x41, 0x42, 0x43], [0x73, 0x74, 0x72, 0x06, 0x00]),
+    ([0x00, 0x8F, 0x90, 0xFF], [0x63, 0xE8, 0x9F, 0xF0, 0x1F, 0x00])
+  ] as [(input: [UInt8], expected: [UInt8])])
+func deflateEncodesExactFixedBlockFixtures(
+  testCase: (input: [UInt8], expected: [UInt8])
+) throws {
+  let output = try ZLib.deflate(input: testCase.input.span, strategy: .fixed)
 
   try expectDeflateBytes(output, testCase.expected)
 }
@@ -42,7 +58,7 @@ func deflateHandlesStoredLengthBoundaries(
 ) throws {
   let input = (0..<testCase.length).map { UInt8(truncatingIfNeeded: $0) }
 
-  let output = try ZLib.deflate(input: input.span)
+  let output = try ZLib.deflate(input: input.span, strategy: .stored)
 
   let bytes = output.span
   let header: [UInt8] = [0x01] + testCase.fields
@@ -56,11 +72,14 @@ func deflateHandlesStoredLengthBoundaries(
   #expect(payloadMatches)
 }
 
-@Test(arguments: [0, 1, 8, 256, 1_024, 65_535, 65_536, 65_537, 131_070, 131_071, 196_605])
-func deflateRoundTripsThroughInflate(length: Int) throws {
+@Test(
+  arguments: [0, 1, 8, 256, 1_024, 65_535, 65_536, 65_537, 131_070, 131_071, 196_605],
+  [ZLib.Strategy.stored, .fixed]
+)
+func deflateRoundTripsThroughInflate(length: Int, strategy: ZLib.Strategy) throws {
   let input = (0..<length).map { UInt8(truncatingIfNeeded: $0 * 37 + 11) }
 
-  let encoded = try ZLib.deflate(input: input.span)
+  let encoded = try ZLib.deflate(input: input.span, strategy: strategy)
   let decoded = try ZLib.inflate(input: encoded.span)
 
   try expectDeflateBytes(decoded, input)
@@ -80,7 +99,7 @@ func deflateRoundTripsThroughInflate(length: Int) throws {
 func deflateSplitsInputIntoStoredBlocks(testCase: (length: Int, blockLengths: [Int])) throws {
   let input = (0..<testCase.length).map { UInt8(truncatingIfNeeded: $0 * 37 + 11) }
 
-  let output = try ZLib.deflate(input: input.span)
+  let output = try ZLib.deflate(input: input.span, strategy: .stored)
 
   let bytes = output.span
   try #require(bytes.count == input.count + 5 * testCase.blockLengths.count)
@@ -106,29 +125,54 @@ func deflateSplitsInputIntoStoredBlocks(testCase: (length: Int, blockLengths: [I
   #expect(inputOffset == input.count)
 }
 
-@Test(arguments: [7, 65_536])
-func deflateReadsOnlyTheSuppliedSpanWithinAnAllocation(allocationSize: Int) throws {
+@Test(
+  arguments: [7, 65_536],
+  [
+    (ZLib.Strategy.stored, [UInt8(0x01), 0x03, 0x00, 0xFC, 0xFF, 0x41, 0x42, 0x43]),
+    (ZLib.Strategy.fixed, [UInt8(0x73), 0x74, 0x72, 0x06, 0x00])
+  ]
+)
+func deflateReadsOnlyTheSuppliedSpanWithinAnAllocation(
+  allocationSize: Int, testCase: (strategy: ZLib.Strategy, expected: [UInt8])
+) throws {
   var allocation = [UInt8](repeating: 0xA5, count: allocationSize)
   allocation[2] = 0x41
   allocation[3] = 0x42
   allocation[4] = 0x43
   let input = allocation.span.extracting(2..<5)
 
-  let output = try ZLib.deflate(input: input)
+  let output = try ZLib.deflate(input: input, strategy: testCase.strategy)
 
-  try expectDeflateBytes(output, [0x01, 0x03, 0x00, 0xFC, 0xFF, 0x41, 0x42, 0x43])
+  try expectDeflateBytes(output, testCase.expected)
 }
 
-@Test func deflateReturnsMutableOutputThatOutlivesInput() throws {
+@Test(
+  arguments: [
+    (.stored, [0x01, 0x01, 0x00, 0xFE, 0xFF, 0x41], 5),
+    (.fixed, [0x73, 0x04, 0x00], 1)
+  ] as [(strategy: ZLib.Strategy, expected: [UInt8], mutationIndex: Int)])
+func deflateReturnsMutableOutputThatOutlivesInput(
+  testCase: (strategy: ZLib.Strategy, expected: [UInt8], mutationIndex: Int)
+) throws {
   var output: UniqueArray<UInt8>
   do {
     let input: [UInt8] = [0x41]
-    output = try ZLib.deflate(input: input.span)
+    output = try ZLib.deflate(input: input.span, strategy: testCase.strategy)
   }
-  try expectDeflateBytes(output, [0x01, 0x01, 0x00, 0xFE, 0xFF, 0x41])
+  try expectDeflateBytes(output, testCase.expected)
 
-  output[5] = 0x42
+  output[testCase.mutationIndex] = 0x42
   output.append(0x43)
 
-  try expectDeflateBytes(output, [0x01, 0x01, 0x00, 0xFE, 0xFF, 0x42, 0x43])
+  var expected = testCase.expected
+  expected[testCase.mutationIndex] = 0x42
+  expected.append(0x43)
+  try expectDeflateBytes(output, expected)
+}
+
+@Test(arguments: [[UInt8](), [UInt8(0x41), 0x42, 0x43]])
+func deflateRejectsUnsupportedDynamicStrategy(input: [UInt8]) {
+  #expect(throws: BitWriterError.reserved) {
+    _ = try ZLib.deflate(input: input.span, strategy: .dynamic)
+  }
 }

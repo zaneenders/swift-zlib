@@ -45,9 +45,27 @@ public enum ZLib: ~Sendable {
     }
   }
 
-  public static func deflate(input: borrowing Span<UInt8>) throws(BitWriterError) -> UniqueArray<UInt8> {
-    var writer = BitWriter(minimumCapacity: input.count)
+  public enum Strategy: Sendable {
+    case stored
+    case fixed
+    case dynamic
+  }
 
+  public static func deflate(input: borrowing Span<UInt8>, strategy: Strategy) throws(BitWriterError) -> UniqueArray<
+    UInt8
+  > {
+    switch strategy {
+    case .stored:
+      return try _deflateStored(input: input)
+    case .fixed:
+      return try _deflateFixed(input: input)
+    case .dynamic:
+      throw BitWriterError.reserved
+    }
+  }
+
+  private static func _deflateStored(input: borrowing Span<UInt8>) throws(BitWriterError) -> UniqueArray<UInt8> {
+    var writer = BitWriter(minimumCapacity: input.count)
     var offset = 0
     repeat {
       let blockLength = min(input.count - offset, Int(UInt16.max))
@@ -66,6 +84,16 @@ public enum ZLib: ~Sendable {
       }
       offset += blockLength
     } while offset < input.count
+    return writer.finish()
+  }
+
+  private static func _deflateFixed(input: borrowing Span<UInt8>) throws(BitWriterError) -> UniqueArray<UInt8> {
+    var writer = BitWriter(minimumCapacity: input.count)
+    writer.writeBits(0b011, count: 3)
+    for byte in input {
+      try writer.writeFixedLiteralLengthSymbol(UInt32(byte))
+    }
+    try writer.writeFixedLiteralLengthSymbol(UInt32(256))
     return writer.finish()
   }
 }
