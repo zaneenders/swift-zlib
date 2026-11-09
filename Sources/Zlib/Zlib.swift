@@ -44,4 +44,28 @@ public enum ZLib: ~Sendable {
       }
     }
   }
+
+  public static func deflate(input: borrowing Span<UInt8>) throws(BitWriterError) -> UniqueArray<UInt8> {
+    var writer = BitWriter(minimumCapacity: input.count)
+
+    var offset = 0
+    repeat {
+      let blockLength = min(input.count - offset, Int(UInt16.max))
+      let end = offset + blockLength
+      let isFinal = end == input.count
+      writer.writeBits(isFinal ? 0b001 : 0b000, count: 3)
+      writer.alignToByte()
+      let length: UInt16 = UInt16(blockLength)
+      writer.writeUInt16LittleEndian(length)
+      writer.writeUInt16LittleEndian(~length)
+      do {
+        let section = input.bytes.extracting(offset..<end)
+        for byte in section {
+          writer.writeBits(byte, count: 8)
+        }
+      }
+      offset += blockLength
+    } while offset < input.count
+    return writer.finish()
+  }
 }

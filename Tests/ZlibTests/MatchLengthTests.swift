@@ -7,7 +7,7 @@ import Testing
   (UInt32(258), UInt32(4)),
   (UInt32(259), UInt32(5)),
   (UInt32(264), UInt32(10)),
-  (UInt32(285), UInt32(258)),
+  (UInt32(285), UInt32(258))
 ])
 func matchLengthWithoutExtraBitsDoesNotReadInput(testCase: (symbol: UInt32, length: UInt32)) throws {
   let input: [UInt8] = []
@@ -29,7 +29,7 @@ func matchLengthWithoutExtraBitsDoesNotReadInput(testCase: (symbol: UInt32, leng
   (UInt32(277), UInt8(10), 4, UInt32(77)),
   (UInt32(280), UInt8(15), 4, UInt32(130)),
   (UInt32(281), UInt8(18), 5, UInt32(149)),
-  (UInt32(284), UInt8(30), 5, UInt32(257)),
+  (UInt32(284), UInt8(30), 5, UInt32(257))
 ])
 func matchLengthReadsOnlyItsNumericExtraBits(
   testCase: (symbol: UInt32, extra: UInt8, bitCount: Int, length: UInt32)
@@ -49,7 +49,7 @@ func matchLengthReadsOnlyItsNumericExtraBits(
   (UInt32(269), 2),
   (UInt32(273), 3),
   (UInt32(277), 4),
-  (UInt32(281), 5),
+  (UInt32(281), 5)
 ])
 func matchLengthRejectsTruncatedExtraBits(testCase: (symbol: UInt32, bitCount: Int)) throws {
   let input: [UInt8] = [0xFF]

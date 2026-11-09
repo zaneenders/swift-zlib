@@ -8,7 +8,7 @@ import Testing
   (UInt8(0xAA), BType.fixedHuffman, false),
   (UInt8(0xAB), BType.fixedHuffman, true),
   (UInt8(0xAC), BType.dynamicHuffman, false),
-  (UInt8(0xAD), BType.dynamicHuffman, true),
+  (UInt8(0xAD), BType.dynamicHuffman, true)
 ])
 func blockHeaderDecodesValidCombinations(
   testCase: (byte: UInt8, bType: BType, isLastByte: Bool)
@@ -32,7 +32,7 @@ func blockHeaderReadsFromTheCurrentBitPosition(bitOffset: Int) throws {
   let input: [UInt8] = [
     0xA5,
     UInt8(truncatingIfNeeded: packed),
-    UInt8(truncatingIfNeeded: packed >> 8),
+    UInt8(truncatingIfNeeded: packed >> 8)
   ]
   var reader = BitReader(input.span.bytes)
   _ = try reader.readBits(8 + bitOffset)

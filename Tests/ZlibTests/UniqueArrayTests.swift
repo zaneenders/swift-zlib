@@ -1,5 +1,4 @@
 import Testing
-
 import Zlib
 
 @Test func uniqueArrayStartsEmpty() {

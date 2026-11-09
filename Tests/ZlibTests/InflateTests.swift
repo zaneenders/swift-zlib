@@ -1,5 +1,4 @@
 import Testing
-
 import Zlib
 
 @Test func inflateReturnsAnArrayTheCallerCanMutateAndGrow() throws {
@@ -31,7 +30,7 @@ import Zlib
 @Test func inflateReadsMultipleStoredBlocks() throws {
   let input: [UInt8] = [
     0x00, 0x02, 0x00, 0xFD, 0xFF, 0x41, 0x42,
-    0x01, 0x01, 0x00, 0xFE, 0xFF, 0x43,
+    0x01, 0x01, 0x00, 0xFE, 0xFF, 0x43
   ]
 
   let output = try ZLib.inflate(input: input.span)
@@ -62,7 +61,7 @@ func inflateRejectsUnsupportedDynamicHuffmanBlocks(header: UInt8) {
 
 @Test(arguments: [
   [UInt8(0x07)],
-  [UInt8(0x01), 0x01, 0x00, 0xFF, 0xFF, 0x41],
+  [UInt8(0x01), 0x01, 0x00, 0xFF, 0xFF, 0x41]
 ])
 func inflateRejectsMalformedInput(input: [UInt8]) {
   #expect(throws: BitReaderError.invalid) {
@@ -75,7 +74,7 @@ func inflateRejectsMalformedInput(input: [UInt8]) {
   [UInt8(0x01)],
   [UInt8(0x01), 0x03, 0x00, 0xFC],
   [UInt8(0x01), 0x03, 0x00, 0xFC, 0xFF, 0x41, 0x42],
-  [UInt8(0x00), 0x00, 0x00, 0xFF, 0xFF],
+  [UInt8(0x00), 0x00, 0x00, 0xFF, 0xFF]
 ])
 func inflateRejectsTruncatedStreams(input: [UInt8]) {
   #expect(throws: BitReaderError.unexpectedEndOfInput) {
@@ -85,7 +84,7 @@ func inflateRejectsTruncatedStreams(input: [UInt8]) {
 
 @Test(arguments: [
   [UInt8(0x01), 0x01, 0x00, 0xFE, 0xFF, 0x41, 0x07],
-  [UInt8(0x73), 0x04, 0x00, 0x07],
+  [UInt8(0x73), 0x04, 0x00, 0x07]
 ])
 func inflateStopsAtTheFinalBlock(input: [UInt8]) throws {
   let output = try ZLib.inflate(input: input.span)
@@ -101,7 +100,7 @@ func inflateStopsAtTheFinalBlock(input: [UInt8]) throws {
   (257, [UInt8(0x01), 0x01, 0xFE, 0xFE]),
   (32_768, [UInt8(0x00), 0x80, 0xFF, 0x7F]),
   (32_769, [UInt8(0x01), 0x80, 0xFE, 0x7F]),
-  (65_535, [UInt8(0xFF), 0xFF, 0x00, 0x00]),
+  (65_535, [UInt8(0xFF), 0xFF, 0x00, 0x00])
 ])
 func inflateHandlesStoredLengthBoundaries(testCase: (length: Int, fields: [UInt8])) throws {
   let payload = (0..<testCase.length).map { UInt8(truncatingIfNeeded: $0) }
@@ -133,11 +132,11 @@ func inflateHandlesStoredLengthBoundaries(testCase: (length: Int, fields: [UInt8
 
 @Test func inflateHandlesEmptyBlocksBeforeBetweenAndAfterPayloads() throws {
   let input: [UInt8] = [
-    0x00, 0x00, 0x00, 0xFF, 0xFF, // Empty, non-final.
-    0x00, 0x02, 0x00, 0xFD, 0xFF, 0x41, 0x42, // "AB", non-final.
-    0x00, 0x00, 0x00, 0xFF, 0xFF, // Empty, non-final.
-    0x00, 0x01, 0x00, 0xFE, 0xFF, 0x43, // "C", non-final.
-    0x01, 0x00, 0x00, 0xFF, 0xFF, // Empty, final.
+    0x00, 0x00, 0x00, 0xFF, 0xFF,  // Empty, non-final.
+    0x00, 0x02, 0x00, 0xFD, 0xFF, 0x41, 0x42,  // "AB", non-final.
+    0x00, 0x00, 0x00, 0xFF, 0xFF,  // Empty, non-final.
+    0x00, 0x01, 0x00, 0xFE, 0xFF, 0x43,  // "C", non-final.
+    0x01, 0x00, 0x00, 0xFF, 0xFF  // Empty, final.
   ]
 
   let output = try ZLib.inflate(input: input.span)
@@ -167,7 +166,7 @@ func inflateIgnoresEveryStoredBlockPaddingPattern(padding: Int) throws {
 func inflateRejectsEveryIncompletePrefixOfMultipleBlocks(prefixLength: Int) {
   let complete: [UInt8] = [
     0x00, 0x02, 0x00, 0xFD, 0xFF, 0x41, 0x42,
-    0x01, 0x03, 0x00, 0xFC, 0xFF, 0x43, 0x44, 0x45,
+    0x01, 0x03, 0x00, 0xFC, 0xFF, 0x43, 0x44, 0x45
   ]
   let input = Array(complete.prefix(prefixLength))
 
@@ -183,7 +182,7 @@ func inflateRejectsEveryIncompletePrefixOfMultipleBlocks(prefixLength: Int) {
   ([UInt8(0x05)], BitReaderError.unsupportedBlockType),
   ([UInt8(0x06)], BitReaderError.invalid),
   ([UInt8(0x07)], BitReaderError.invalid),
-  ([UInt8(0x01), 0x01, 0x00, 0xFF, 0xFF, 0x42], BitReaderError.invalid),
+  ([UInt8(0x01), 0x01, 0x00, 0xFF, 0xFF, 0x42], BitReaderError.invalid)
 ])
 func inflateReportsErrorsInLaterBlocks(testCase: (suffix: [UInt8], error: BitReaderError)) {
   let firstBlock: [UInt8] = [0x00, 0x01, 0x00, 0xFE, 0xFF, 0x41]
@@ -198,7 +197,7 @@ func inflateReportsErrorsInLaterBlocks(testCase: (suffix: [UInt8], error: BitRea
   let allocation: [UInt8] = [
     0xDE, 0xAD,
     0x01, 0x03, 0x00, 0xFC, 0xFF, 0x41, 0x42, 0x43,
-    0xBE, 0xEF,
+    0xBE, 0xEF
   ]
   let input = allocation.span.extracting(2..<10)
 
@@ -224,7 +223,7 @@ func inflateReportsErrorsInLaterBlocks(testCase: (suffix: [UInt8], error: BitRea
 @Test(arguments: [
   ([UInt8(0x03), 0x00], [UInt8]()),
   ([UInt8(0x73), 0x04, 0x00], Array("A".utf8)),
-  ([UInt8(0x63), 0xE8, 0x9F, 0xF0, 0x1F, 0x00], [UInt8(0x00), 0x8F, 0x90, 0xFF]),
+  ([UInt8(0x63), 0xE8, 0x9F, 0xF0, 0x1F, 0x00], [UInt8(0x00), 0x8F, 0x90, 0xFF])
 ])
 func inflateDecodesFixedHuffmanLiterals(testCase: (input: [UInt8], expected: [UInt8])) throws {
   let output = try ZLib.inflate(input: testCase.input.span)
@@ -244,7 +243,7 @@ func inflateDecodesFixedHuffmanLiterals(testCase: (input: [UInt8], expected: [UI
     Array("ABCDEFGHABCDEFGHABCDEFGHABCDE".utf8)
   ),
   // One "Z", followed by an overlapping length-258, distance-1 match.
-  ([UInt8(0x8B), 0x1A, 0x05, 0x00], Array(repeating: UInt8(0x5A), count: 259)),
+  ([UInt8(0x8B), 0x1A, 0x05, 0x00], Array(repeating: UInt8(0x5A), count: 259))
 ])
 func inflateExpandsFixedHuffmanMatches(testCase: (input: [UInt8], expected: [UInt8])) throws {
   let output = try ZLib.inflate(input: testCase.input.span)
@@ -257,8 +256,8 @@ func inflateExpandsFixedHuffmanMatches(testCase: (input: [UInt8], expected: [UIn
 
 @Test func inflateKeepsHistoryAcrossStoredAndFixedBlocks() throws {
   let input: [UInt8] = [
-    0x00, 0x03, 0x00, 0xFC, 0xFF, 0x41, 0x42, 0x43, // Stored "ABC".
-    0x03, 0x22, 0x00, // Fixed block: length 3, distance 3, end-of-block.
+    0x00, 0x03, 0x00, 0xFC, 0xFF, 0x41, 0x42, 0x43,  // Stored "ABC".
+    0x03, 0x22, 0x00  // Fixed block: length 3, distance 3, end-of-block.
   ]
 
   let output = try ZLib.inflate(input: input.span)
@@ -274,7 +273,7 @@ func inflateExpandsFixedHuffmanMatches(testCase: (input: [UInt8], expected: [UIn
   // Fixed "A", followed by a stored "B" block whose header starts at bit offset 2.
   [UInt8(0x72), 0x04, 0x04, 0x01, 0x00, 0xFE, 0xFF, 0x42],
   // Fixed "A", followed by a fixed "B" block whose header starts at bit offset 2.
-  [UInt8(0x72), 0x04, 0xCC, 0x09, 0x00],
+  [UInt8(0x72), 0x04, 0xCC, 0x09, 0x00]
 ])
 func inflateReadsBlockHeadersAfterUnalignedFixedBlocks(input: [UInt8]) throws {
   let output = try ZLib.inflate(input: input.span)
@@ -286,10 +285,10 @@ func inflateReadsBlockHeadersAfterUnalignedFixedBlocks(input: [UInt8]) throws {
 }
 
 @Test(arguments: [
-  [UInt8(0x1B), 0x03], // Literal/length symbol 286.
-  [UInt8(0x1B), 0x07], // Literal/length symbol 287.
-  [UInt8(0x73), 0x04, 0x3E], // Distance code 30 after literal "A" and length 3.
-  [UInt8(0x73), 0x04, 0x7E], // Distance code 31 after literal "A" and length 3.
+  [UInt8(0x1B), 0x03],  // Literal/length symbol 286.
+  [UInt8(0x1B), 0x07],  // Literal/length symbol 287.
+  [UInt8(0x73), 0x04, 0x3E],  // Distance code 30 after literal "A" and length 3.
+  [UInt8(0x73), 0x04, 0x7E]  // Distance code 31 after literal "A" and length 3.
 ])
 func inflateRejectsForbiddenFixedHuffmanSymbols(input: [UInt8]) {
   #expect(throws: BitReaderError.forbiddenSymbol) {
@@ -298,8 +297,8 @@ func inflateRejectsForbiddenFixedHuffmanSymbols(input: [UInt8]) {
 }
 
 @Test(arguments: [
-  [UInt8(0x03), 0x02, 0x00], // Match distance 1 with empty history.
-  [UInt8(0x73), 0x74, 0x72, 0x06, 0x62, 0x00], // Match distance 4 after only "ABC".
+  [UInt8(0x03), 0x02, 0x00],  // Match distance 1 with empty history.
+  [UInt8(0x73), 0x74, 0x72, 0x06, 0x62, 0x00]  // Match distance 4 after only "ABC".
 ])
 func inflateRejectsFixedMatchesBeyondAvailableHistory(input: [UInt8]) {
   #expect(throws: BitReaderError.invalid) {
