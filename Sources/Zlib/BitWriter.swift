@@ -14,6 +14,16 @@ struct BitWriter: ~Copyable {
     writeBits(bit, count: 1)
   }
 
+  /// Writes the low `bitCount` bits of a code, most significant bit first.
+  mutating func writeHuffmanCode(_ code: UInt16, bitCount: Int) {
+    precondition((0...UInt16.bitWidth).contains(bitCount), "Invalid Huffman code bit count")
+
+    for index in (0..<bitCount).reversed() {
+      let bit = UInt8((code >> index) & 1)
+      writeBits(bit, count: 1)
+    }
+  }
+
   mutating func writeFixedLiteralLengthSymbol(_ symbol: UInt32) throws(BitWriterError) {
     let code: UInt32
     let bitCount: UInt8
@@ -35,10 +45,7 @@ struct BitWriter: ~Copyable {
       throw BitWriterError.reserved
     }
 
-    for index in (0..<bitCount).reversed() {
-      let bit = UInt8((code >> index) & 1)
-      writeBits(bit, count: 1)
-    }
+    writeHuffmanCode(UInt16(code), bitCount: Int(bitCount))
   }
 
   mutating func writeBits(_ bits: UInt8, count: Int) {

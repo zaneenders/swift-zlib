@@ -27,7 +27,10 @@ let package = Package(
   targets: [
     .target(
       name: "Zlib",
-      dependencies: [.product(name: "BasicContainers", package: "swift-collections")],
+      dependencies: [
+        .product(name: "BasicContainers", package: "swift-collections"),
+        .product(name: "HeapModule", package: "swift-collections")
+      ],
       swiftSettings: swiftSettings
     ),
     .testTarget(

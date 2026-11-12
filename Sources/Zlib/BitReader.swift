@@ -96,6 +96,11 @@ struct BitReader: ~Copyable, ~Escapable {
       let bit = try readBits(1)
       code = (code << 1) | bit
     }
+    return try readMatchDistance(symbol: code)
+  }
+
+  /// Reads the extra bits for an already-decoded distance symbol.
+  mutating func readMatchDistance(symbol code: UInt32) throws(BitReaderError) -> UInt32 {
     switch code {
     case 0...3: return code + 1
     case 4: return 5 + (try readBits(1))

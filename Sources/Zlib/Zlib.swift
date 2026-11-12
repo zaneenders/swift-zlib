@@ -1,7 +1,6 @@
-/// Decompression operations for raw DEFLATE streams.
+/// Compression and decompression operations for raw DEFLATE streams.
 public enum ZLib: ~Sendable {
-  /// Decompresses a raw DEFLATE stream containing stored or fixed Huffman blocks.
-  /// Dynamic Huffman blocks are not supported yet.
+  /// Decompresses a raw DEFLATE stream containing stored, fixed, or dynamic Huffman blocks.
   /// Returns a mutable array whose storage belongs to the caller.
   public static func inflate(input: borrowing Span<UInt8>) throws(BitReaderError) -> UniqueArray<UInt8> {
     var reader = BitReader(input.bytes)
@@ -35,7 +34,29 @@ public enum ZLib: ~Sendable {
             throw .forbiddenSymbol
           }
         }
-      default:
+      case .dynamicHuffman:
+        let tables = try reader.readDynamicHuffmanTables()
+        dynamicHuffmanLoop: while true {
+          let code = try tables.literalLength.readSymbol(from: &reader)
+          switch code {
+          case 0...255:
+            output.append(UInt8(code))
+          case 256:
+            break dynamicHuffmanLoop
+          case 257...285:
+            let length = try reader.readMatchLength(symbol: code)
+            let distanceSymbol = try tables.distance.readSymbol(from: &reader)
+            let distance = try reader.readMatchDistance(symbol: distanceSymbol)
+            do {
+              try output.appendMatch(distance: Int(distance), length: Int(length))
+            } catch {
+              throw .invalid
+            }
+          default:
+            throw .forbiddenSymbol
+          }
+        }
+      case .invalid:
         throw .unsupportedBlockType
       }
 
@@ -51,6 +72,7 @@ public enum ZLib: ~Sendable {
     case dynamic
   }
 
+  /// Compresses a raw DEFLATE stream using stored blocks or literal-only Huffman coding.
   public static func deflate(input: borrowing Span<UInt8>, strategy: Strategy) throws(BitWriterError) -> UniqueArray<
     UInt8
   > {
@@ -60,7 +82,7 @@ public enum ZLib: ~Sendable {
     case .fixed:
       return try _deflateFixed(input: input)
     case .dynamic:
-      throw BitWriterError.reserved
+      return try _deflateDynamic(input: input)
     }
   }
 
@@ -94,6 +116,28 @@ public enum ZLib: ~Sendable {
       try writer.writeFixedLiteralLengthSymbol(UInt32(byte))
     }
     try writer.writeFixedLiteralLengthSymbol(UInt32(256))
+    return writer.finish()
+  }
+
+  private static func _deflateDynamic(input: borrowing Span<UInt8>) throws(BitWriterError) -> UniqueArray<UInt8> {
+    var counts = [Int](repeating: 0, count: 257)
+    for byte in input {
+      counts[Int(byte)] += 1
+    }
+    counts[256] = 1
+
+    let lengths = huffmanCodeLengths(frequencies: counts, maxBits: 15)
+    let codes = canonicalHuffmanCodes(lengths: lengths)
+    var writer = BitWriter(minimumCapacity: input.count)
+
+    writer.writeBits(0b101, count: 3)  // Final block, dynamic Huffman coding.
+    // A one-bit distance code describes an unused distance alphabet for literals.
+    writer.writeDynamicHuffmanHeader(literalLengths: lengths, distanceLengths: [1])
+    for byte in input {
+      let symbol = Int(byte)
+      writer.writeHuffmanCode(codes[symbol]!, bitCount: lengths[symbol])
+    }
+    writer.writeHuffmanCode(codes[256]!, bitCount: lengths[256])
     return writer.finish()
   }
 }

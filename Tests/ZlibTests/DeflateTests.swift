@@ -74,7 +74,7 @@ func deflateHandlesStoredLengthBoundaries(
 
 @Test(
   arguments: [0, 1, 8, 256, 1_024, 65_535, 65_536, 65_537, 131_070, 131_071, 196_605],
-  [ZLib.Strategy.stored, .fixed]
+  [ZLib.Strategy.stored, .fixed, .dynamic]
 )
 func deflateRoundTripsThroughInflate(length: Int, strategy: ZLib.Strategy) throws {
   let input = (0..<length).map { UInt8(truncatingIfNeeded: $0 * 37 + 11) }
@@ -170,9 +170,26 @@ func deflateReturnsMutableOutputThatOutlivesInput(
   try expectDeflateBytes(output, expected)
 }
 
-@Test(arguments: [[UInt8](), [UInt8(0x41), 0x42, 0x43]])
-func deflateRejectsUnsupportedDynamicStrategy(input: [UInt8]) {
-  #expect(throws: BitWriterError.reserved) {
-    _ = try ZLib.deflate(input: input.span, strategy: .dynamic)
-  }
+@Test(arguments: [[UInt8](), [UInt8(0x41)], [UInt8(0x41), 0x41, 0x42], Array(UInt8.min...UInt8.max)])
+func deflateWritesAFinalDynamicHuffmanBlock(input: [UInt8]) throws {
+  let output = try ZLib.deflate(input: input.span, strategy: .dynamic)
+
+  try #require(output.count > 0)
+  #expect(output.span[0] & 0b111 == 0b101)
+}
+
+@Test(arguments: [7, 65_536])
+func deflateDynamicReadsOnlyTheSuppliedSpanWithinAnAllocation(allocationSize: Int) throws {
+  var allocation = [UInt8](repeating: 0xA5, count: allocationSize)
+  allocation[2] = 0x41
+  allocation[3] = 0x42
+  allocation[4] = 0x43
+  let input = allocation.span.extracting(2..<5)
+  let expectedInput: [UInt8] = [0x41, 0x42, 0x43]
+
+  let output = try ZLib.deflate(input: input, strategy: .dynamic)
+  let expected = try ZLib.deflate(input: expectedInput.span, strategy: .dynamic)
+  let expectedBytes = expected.span
+
+  try expectDeflateBytes(output, (0..<expectedBytes.count).map { expectedBytes[$0] })
 }

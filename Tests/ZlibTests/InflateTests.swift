@@ -51,10 +51,10 @@ import Zlib
 }
 
 @Test(arguments: [UInt8(0x04), 0x05])
-func inflateRejectsUnsupportedDynamicHuffmanBlocks(header: UInt8) {
+func inflateRejectsTruncatedDynamicHuffmanHeaders(header: UInt8) {
   let input: [UInt8] = [header]
 
-  #expect(throws: BitReaderError.unsupportedBlockType) {
+  #expect(throws: BitReaderError.unexpectedEndOfInput) {
     _ = try ZLib.inflate(input: input.span)
   }
 }
@@ -178,8 +178,8 @@ func inflateRejectsEveryIncompletePrefixOfMultipleBlocks(prefixLength: Int) {
 @Test(arguments: [
   ([UInt8(0x02)], BitReaderError.unexpectedEndOfInput),
   ([UInt8(0x03)], BitReaderError.unexpectedEndOfInput),
-  ([UInt8(0x04)], BitReaderError.unsupportedBlockType),
-  ([UInt8(0x05)], BitReaderError.unsupportedBlockType),
+  ([UInt8(0x04)], BitReaderError.unexpectedEndOfInput),
+  ([UInt8(0x05)], BitReaderError.unexpectedEndOfInput),
   ([UInt8(0x06)], BitReaderError.invalid),
   ([UInt8(0x07)], BitReaderError.invalid),
   ([UInt8(0x01), 0x01, 0x00, 0xFF, 0xFF, 0x42], BitReaderError.invalid)

@@ -10,6 +10,7 @@ enum InteropPayload: CaseIterable, Sendable {
   case repeatedByte
   case multipleBlocks
   case pseudoRandom
+  case skewedFrequencies
 
   var bytes: [UInt8] {
     switch self {
@@ -33,15 +34,23 @@ enum InteropPayload: CaseIterable, Sendable {
         state ^= state << 5
         return UInt8(truncatingIfNeeded: state)
       }
+    case .skewedFrequencies:
+      var frequencies = [1, 1]
+      for _ in 0..<18 {
+        frequencies.append(frequencies[frequencies.count - 2] + frequencies[frequencies.count - 1])
+      }
+      return frequencies.enumerated().flatMap { symbol, count in
+        [UInt8](repeating: UInt8(symbol), count: count)
+      }
     }
   }
 }
 
 // A negative windowBits selects raw DEFLATE, matching the Swift API.
-private func cZlibDeflate(_ input: [UInt8], level: Int32) throws -> [UInt8] {
+private func cZlibDeflate(_ input: [UInt8], level: Int32, strategy: Int32 = Z_FIXED) throws -> [UInt8] {
   var stream = z_stream()
   let initialized = deflateInit2_(
-    &stream, level, Z_DEFLATED, -MAX_WBITS, 8, Z_FIXED,
+    &stream, level, Z_DEFLATED, -MAX_WBITS, 8, strategy,
     ZLIB_VERSION, Int32(MemoryLayout<z_stream>.size)
   )
   try #require(initialized == Z_OK)
@@ -87,7 +96,7 @@ private func cZlibInflate(_ input: [UInt8], expectedCount: Int) throws -> [UInt8
   return Array(output.prefix(Int(stream.total_out)))
 }
 
-@Test(arguments: InteropPayload.allCases, [ZLib.Strategy.stored, .fixed])
+@Test(arguments: InteropPayload.allCases, [ZLib.Strategy.stored, .fixed, .dynamic])
 func swiftDeflateOutputIsDecodedByCZlib(payload: InteropPayload, strategy: ZLib.Strategy) throws {
   let input = payload.bytes
   let encoded = try ZLib.deflate(input: input.span, strategy: strategy)
@@ -112,4 +121,21 @@ func swiftInflateDecodesCZlibOutput(payload: InteropPayload, level: Int32) throw
   try #require(bytes.count == input.count)
   let allBytesMatch = input.indices.allSatisfy { bytes[$0] == input[$0] }
   #expect(allBytesMatch)
+}
+
+@Test(arguments: InteropPayload.allCases, [Int32(1), Z_DEFAULT_COMPRESSION, Z_BEST_COMPRESSION])
+func swiftInflateDecodesCZlibDefaultStrategy(payload: InteropPayload, level: Int32) throws {
+  let input = payload.bytes
+  let encoded = try cZlibDeflate(input, level: level, strategy: Z_DEFAULT_STRATEGY)
+  if payload == .text {
+    // Ensure the independent encoder exercises dynamic tables and LZ77 matches.
+    try #require(encoded[0] & 0b110 == 0b100)
+    #expect(encoded.count < input.count / 10)
+  }
+
+  let decoded = try ZLib.inflate(input: encoded.span)
+
+  let bytes = decoded.span
+  try #require(bytes.count == input.count)
+  #expect(input.indices.allSatisfy { bytes[$0] == input[$0] })
 }

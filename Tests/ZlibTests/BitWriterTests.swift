@@ -383,6 +383,89 @@ func bitWriterWritesStoredLengthAndComplement(
   try expectBitWriterBytes(output, testCase.expected)
 }
 
+@Test(arguments: [
+  (0, 0, []),
+  (0, 1, [0x00]),
+  (1, 1, [0x01]),
+  (0b10, 2, [0x01]),
+  (0b11, 2, [0x03]),
+  (0b001, 3, [0x04]),
+  (0b00101, 5, [0x14]),
+  (0b01110001, 8, [0x8E]),
+  (0b110010001, 9, [0x13, 0x01]),
+  (0b100000000000011, 15, [0x01, 0x60]),
+  (0x1234, 16, [0x48, 0x2C])
+] as [(code: UInt16, bitCount: Int, expected: [UInt8])])
+func bitWriterWritesExactHuffmanCodeBytes(
+  testCase: (code: UInt16, bitCount: Int, expected: [UInt8])
+) throws {
+  var writer = BitWriter(minimumCapacity: 0)
+
+  writer.writeHuffmanCode(testCase.code, bitCount: testCase.bitCount)
+  let output = writer.finish()
+
+  try expectBitWriterBytes(output, testCase.expected)
+}
+
+@Test(
+  arguments: 0...7,
+  [
+    (UInt16(0b00101), UInt32(0x14), 5),
+    (UInt16(0b110010001), UInt32(0x113), 9),
+    (UInt16(0x4003), UInt32(0x6001), 15),
+    (UInt16(0x1234), UInt32(0x2C48), 16)
+  ]
+)
+func bitWriterHuffmanCodesPreserveAdjacentFieldsAtEveryBitOffset(
+  bitOffset: Int,
+  testCase: (code: UInt16, packedCode: UInt32, bitCount: Int)
+) throws {
+  var writer = BitWriter(minimumCapacity: 0)
+
+  writer.writeBits(0xFF, count: bitOffset)
+  writer.writeHuffmanCode(testCase.code, bitCount: testCase.bitCount)
+  writer.writeBits(0b101, count: 3)
+  let output = writer.finish()
+
+  let prefix = (UInt32(1) << bitOffset) - 1
+  let packed = prefix | (testCase.packedCode << bitOffset)
+    | (UInt32(0b101) << (bitOffset + testCase.bitCount))
+  let byteCount = (bitOffset + testCase.bitCount + 3 + 7) / 8
+  let expected = (0..<byteCount).map { UInt8(truncatingIfNeeded: packed >> ($0 * 8)) }
+  try expectBitWriterBytes(output, expected)
+}
+
+@Test(arguments: [0, 3, 8])
+func bitWriterZeroLengthHuffmanCodePreservesPosition(prefixLength: Int) throws {
+  var writer = BitWriter(minimumCapacity: 0)
+
+  writer.writeBits(0xB6, count: prefixLength)
+  writer.writeHuffmanCode(.max, bitCount: 0)
+  writer.writeBits(UInt8(0xB6) >> prefixLength, count: 8 - prefixLength)
+  let output = writer.finish()
+
+  try expectBitWriterBytes(output, [0xB6])
+}
+
+@Test func bitWriterWritesCanonicalHuffmanCodesForAABAndTheEndMarker() throws {
+  var frequencies = [Int](repeating: 0, count: 286)
+  frequencies[65] = 2
+  frequencies[66] = 1
+  frequencies[256] = 1
+  let lengths = huffmanCodeLengths(frequencies: frequencies)
+  let codes = canonicalHuffmanCodes(lengths: lengths)
+  var writer = BitWriter(minimumCapacity: 0)
+
+  for symbol in [65, 65, 66, 256] {
+    let code = try #require(codes[symbol])
+    writer.writeHuffmanCode(code, bitCount: lengths[symbol])
+  }
+  let output = writer.finish()
+
+  // Codes 0, 0, 10, 11 produce bits 0, 0, 1, 0, 1, 1, then zero padding.
+  try expectBitWriterBytes(output, [0x34])
+}
+
 // Fixed codes from RFC 1951, section 3.2.6; each expected output is zero-padded.
 @Test(arguments: [
   (UInt32(0), [UInt8(0x0C)]),
