@@ -3,23 +3,23 @@ import Testing
 @testable import Zlib
 
 @Test(arguments: [
-  (UInt8(0xA8), BType.stored, false),
-  (UInt8(0xA9), BType.stored, true),
-  (UInt8(0xAA), BType.fixedHuffman, false),
-  (UInt8(0xAB), BType.fixedHuffman, true),
-  (UInt8(0xAC), BType.dynamicHuffman, false),
-  (UInt8(0xAD), BType.dynamicHuffman, true)
+  (UInt8(0xA8), BlockType.stored, false),
+  (UInt8(0xA9), BlockType.stored, true),
+  (UInt8(0xAA), BlockType.fixedHuffman, false),
+  (UInt8(0xAB), BlockType.fixedHuffman, true),
+  (UInt8(0xAC), BlockType.dynamicHuffman, false),
+  (UInt8(0xAD), BlockType.dynamicHuffman, true)
 ])
 func blockHeaderDecodesValidCombinations(
-  testCase: (byte: UInt8, bType: BType, isLastByte: Bool)
+  testCase: (byte: UInt8, blockType: BlockType, isFinal: Bool)
 ) throws {
   let input: [UInt8] = [testCase.byte]
   var reader = BitReader(input.span.bytes)
 
-  let header = try reader.parseheader()
+  let header = try reader.readBlockHeader()
 
-  #expect(header.bType == testCase.bType)
-  #expect(header.isLastByte == testCase.isLastByte)
+  #expect(header.blockType == testCase.blockType)
+  #expect(header.isFinal == testCase.isFinal)
   #expect(reader.byteOffset == 0)
   #expect(reader.bitOffset == 3)
   #expect(try reader.readBits(5) == 0b10101)
@@ -37,10 +37,10 @@ func blockHeaderReadsFromTheCurrentBitPosition(bitOffset: Int) throws {
   var reader = BitReader(input.span.bytes)
   _ = try reader.readBits(8 + bitOffset)
 
-  let header = try reader.parseheader()
+  let header = try reader.readBlockHeader()
 
-  #expect(header.bType == .fixedHuffman)
-  #expect(header.isLastByte == true)
+  #expect(header.blockType == .fixedHuffman)
+  #expect(header.isFinal == true)
   #expect(reader.byteOffset == 1 + (bitOffset + 3) / 8)
   #expect(reader.bitOffset == (bitOffset + 3) % 8)
   #expect(try reader.readBits(5) == 0b10101)
@@ -51,10 +51,10 @@ func blockHeaderReadsFromTheCurrentBitPosition(bitOffset: Int) throws {
   var reader = BitReader(input.span.bytes)
   _ = try reader.readBits(5)
 
-  let header = try reader.parseheader()
+  let header = try reader.readBlockHeader()
 
-  #expect(header.bType == .dynamicHuffman)
-  #expect(header.isLastByte == true)
+  #expect(header.blockType == .dynamicHuffman)
+  #expect(header.isFinal == true)
   #expect(reader.byteOffset == 1)
   #expect(reader.bitOffset == 0)
   #expect(throws: BitReaderError.unexpectedEndOfInput) {
@@ -68,7 +68,7 @@ func blockHeaderRejectsReservedBlockType(byte: UInt8) {
   var reader = BitReader(input.span.bytes)
 
   #expect(throws: (any Error).self) {
-    _ = try reader.parseheader()
+    _ = try reader.readBlockHeader()
   }
 }
 
@@ -77,7 +77,7 @@ func blockHeaderRejectsReservedBlockType(byte: UInt8) {
   var reader = BitReader(input.span.bytes)
 
   #expect(throws: BitReaderError.unexpectedEndOfInput) {
-    _ = try reader.parseheader()
+    _ = try reader.readBlockHeader()
   }
   #expect(reader.byteOffset == 0)
   #expect(reader.bitOffset == 0)
@@ -92,7 +92,7 @@ func blockHeaderPreservesPositionAfterTruncation(remainingBits: Int) throws {
   let originalBitOffset = reader.bitOffset
 
   #expect(throws: BitReaderError.unexpectedEndOfInput) {
-    _ = try reader.parseheader()
+    _ = try reader.readBlockHeader()
   }
   #expect(reader.byteOffset == originalByteOffset)
   #expect(reader.bitOffset == originalBitOffset)

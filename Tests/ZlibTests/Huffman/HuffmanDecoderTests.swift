@@ -2,22 +2,23 @@ import Testing
 
 @testable import Zlib
 
-@Test(arguments: [
-  ([], .codeLength),
-  ([0, 0], .literalLength),
-  ([1], .codeLength),
-  ([1, 1, 1], .literalLength),
-  ([2, 2], .literalLength),
-  ([2], .distance),
-  ([1, 1, 1], .distance),
-  ([-1, 1], .distance),
-  ([16], .literalLength),
-  ([8], .codeLength)
-] as [(lengths: [Int], alphabet: HuffmanDecoder.Alphabet)])
+@Test(
+  arguments: [
+    ([], .codeLength),
+    ([0, 0], .literalLength),
+    ([1], .codeLength),
+    ([1, 1, 1], .literalLength),
+    ([2, 2], .literalLength),
+    ([2], .distance),
+    ([1, 1, 1], .distance),
+    ([-1, 1], .distance),
+    ([16], .literalLength),
+    ([8], .codeLength)
+  ] as [(lengths: [Int], alphabet: HuffmanDecoder.Alphabet)])
 func huffmanDecoderRejectsInvalidTrees(
   testCase: (lengths: [Int], alphabet: HuffmanDecoder.Alphabet)
 ) {
-  #expect(throws: BitReaderError.invalid) {
+  #expect(throws: BitReaderError.invalidHuffmanTable) {
     _ = try HuffmanDecoder(lengths: testCase.lengths, alphabet: testCase.alphabet)
   }
 }
@@ -50,7 +51,7 @@ func huffmanDecoderRejectsInvalidTrees(
   let input: [UInt8] = [0x01]
   var reader = BitReader(input.span.bytes)
 
-  #expect(throws: BitReaderError.invalid) {
+  #expect(throws: BitReaderError.invalidHuffmanTable) {
     _ = try decoder.readSymbol(from: &reader)
   }
 }
@@ -60,7 +61,7 @@ func huffmanDecoderRejectsInvalidTrees(
   let input: [UInt8] = []
   var reader = BitReader(input.span.bytes)
 
-  #expect(throws: BitReaderError.invalid) {
+  #expect(throws: BitReaderError.invalidHuffmanTable) {
     _ = try decoder.readSymbol(from: &reader)
   }
 }

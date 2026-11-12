@@ -15,7 +15,7 @@ struct HuffmanDecoder {
   init(lengths: [Int], alphabet: Alphabet) throws(BitReaderError) {
     let limit = alphabet == .codeLength ? 7 : 15
     guard lengths.allSatisfy({ (0...limit).contains($0) }) else {
-      throw .invalid
+      throw .invalidHuffmanTable
     }
     let maxLength = lengths.max() ?? 0
     var counts = [Int](repeating: 0, count: maxLength + 1)
@@ -26,19 +26,19 @@ struct HuffmanDecoder {
     if maxLength == 0 {
       // Literal-only blocks may omit every distance symbol.
       guard alphabet == .distance else {
-        throw .invalid
+        throw .invalidHuffmanTable
       }
     } else {
       var available = 1
       for length in 1...maxLength {
         available = (available << 1) - counts[length]
         guard available >= 0 else {
-          throw .invalid
+          throw .invalidHuffmanTable
         }
       }
       // Only the data alphabets permit a single symbol with a one-bit code.
       guard available == 0 || (alphabet != .codeLength && maxLength == 1) else {
-        throw .invalid
+        throw .invalidHuffmanTable
       }
     }
 
@@ -69,7 +69,7 @@ struct HuffmanDecoder {
 
   func readSymbol(from reader: inout BitReader) throws(BitReaderError) -> UInt32 {
     guard maxLength > 0 else {
-      throw .invalid
+      throw .invalidHuffmanTable
     }
     var code = 0
     for length in 1...maxLength {
@@ -79,6 +79,6 @@ struct HuffmanDecoder {
         return symbols[symbolOffsets[length] + offset]
       }
     }
-    throw .invalid
+    throw .invalidHuffmanTable
   }
 }

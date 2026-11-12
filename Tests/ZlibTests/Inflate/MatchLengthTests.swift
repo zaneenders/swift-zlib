@@ -70,7 +70,7 @@ func matchLengthRejectsSymbolsOutsideTheLengthAlphabet(symbol: UInt32) {
   let input: [UInt8] = [0x69]
   var reader = BitReader(input.span.bytes)
 
-  #expect(throws: BitReaderError.invalid) {
+  #expect(throws: BitReaderError.forbiddenSymbol) {
     _ = try reader.readMatchLength(symbol: symbol)
   }
   #expect(reader.byteOffset == 0)

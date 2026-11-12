@@ -83,6 +83,15 @@ struct BitWriter: ~Copyable {
     writeBits(low, count: 8)
     writeBits(high, count: 8)
   }
+
+  /// Writes an unsigned numeric field least significant bit first.
+  mutating func writeExtraBits(_ value: UInt16, count: Int) {
+    precondition((0...16).contains(count))
+    writeBits(UInt8(truncatingIfNeeded: value), count: min(count, 8))
+    if count > 8 {
+      writeBits(UInt8(value >> 8), count: count - 8)
+    }
+  }
 }
 
 public enum BitWriterError: Error {

@@ -33,6 +33,11 @@ let package = Package(
       ],
       swiftSettings: swiftSettings
     ),
+    .executableTarget(
+      name: "ZlibBenchmarks",
+      dependencies: ["Zlib"],
+      path: "Benchmarks/ZlibBenchmarks"
+    ),
     .testTarget(
       name: "ZlibTests",
       dependencies: ["Zlib"]

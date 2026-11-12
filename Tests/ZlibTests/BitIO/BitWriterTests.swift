@@ -383,19 +383,20 @@ func bitWriterWritesStoredLengthAndComplement(
   try expectBitWriterBytes(output, testCase.expected)
 }
 
-@Test(arguments: [
-  (0, 0, []),
-  (0, 1, [0x00]),
-  (1, 1, [0x01]),
-  (0b10, 2, [0x01]),
-  (0b11, 2, [0x03]),
-  (0b001, 3, [0x04]),
-  (0b00101, 5, [0x14]),
-  (0b01110001, 8, [0x8E]),
-  (0b110010001, 9, [0x13, 0x01]),
-  (0b100000000000011, 15, [0x01, 0x60]),
-  (0x1234, 16, [0x48, 0x2C])
-] as [(code: UInt16, bitCount: Int, expected: [UInt8])])
+@Test(
+  arguments: [
+    (0, 0, []),
+    (0, 1, [0x00]),
+    (1, 1, [0x01]),
+    (0b10, 2, [0x01]),
+    (0b11, 2, [0x03]),
+    (0b001, 3, [0x04]),
+    (0b00101, 5, [0x14]),
+    (0b01110001, 8, [0x8E]),
+    (0b110010001, 9, [0x13, 0x01]),
+    (0b1000000_00000011, 15, [0x01, 0x60]),
+    (0x1234, 16, [0x48, 0x2C])
+  ] as [(code: UInt16, bitCount: Int, expected: [UInt8])])
 func bitWriterWritesExactHuffmanCodeBytes(
   testCase: (code: UInt16, bitCount: Int, expected: [UInt8])
 ) throws {
@@ -428,7 +429,8 @@ func bitWriterHuffmanCodesPreserveAdjacentFieldsAtEveryBitOffset(
   let output = writer.finish()
 
   let prefix = (UInt32(1) << bitOffset) - 1
-  let packed = prefix | (testCase.packedCode << bitOffset)
+  let packed =
+    prefix | (testCase.packedCode << bitOffset)
     | (UInt32(0b101) << (bitOffset + testCase.bitCount))
   let byteCount = (bitOffset + testCase.bitCount + 3 + 7) / 8
   let expected = (0..<byteCount).map { UInt8(truncatingIfNeeded: packed >> ($0 * 8)) }
@@ -467,21 +469,22 @@ func bitWriterZeroLengthHuffmanCodePreservesPosition(prefixLength: Int) throws {
 }
 
 // Fixed codes from RFC 1951, section 3.2.6; each expected output is zero-padded.
-@Test(arguments: [
-  (UInt32(0), [UInt8(0x0C)]),
-  (UInt32(1), [UInt8(0x8C)]),
-  (UInt32(65), [UInt8(0x8E)]),
-  (UInt32(143), [UInt8(0xFD)]),
-  (UInt32(144), [UInt8(0x13), 0x00]),
-  (UInt32(145), [UInt8(0x13), 0x01]),
-  (UInt32(255), [UInt8(0xFF), 0x01]),
-  (UInt32(256), [UInt8(0x00)]),
-  (UInt32(257), [UInt8(0x40)]),
-  (UInt32(279), [UInt8(0x74)]),
-  (UInt32(280), [UInt8(0x03)]),
-  (UInt32(281), [UInt8(0x83)]),
-  (UInt32(285), [UInt8(0xA3)])
-] as [(symbol: UInt32, expected: [UInt8])])
+@Test(
+  arguments: [
+    (UInt32(0), [UInt8(0x0C)]),
+    (UInt32(1), [UInt8(0x8C)]),
+    (UInt32(65), [UInt8(0x8E)]),
+    (UInt32(143), [UInt8(0xFD)]),
+    (UInt32(144), [UInt8(0x13), 0x00]),
+    (UInt32(145), [UInt8(0x13), 0x01]),
+    (UInt32(255), [UInt8(0xFF), 0x01]),
+    (UInt32(256), [UInt8(0x00)]),
+    (UInt32(257), [UInt8(0x40)]),
+    (UInt32(279), [UInt8(0x74)]),
+    (UInt32(280), [UInt8(0x03)]),
+    (UInt32(281), [UInt8(0x83)]),
+    (UInt32(285), [UInt8(0xA3)])
+  ] as [(symbol: UInt32, expected: [UInt8])])
 func bitWriterWritesExactFixedHuffmanSymbolBytes(
   testCase: (symbol: UInt32, expected: [UInt8])
 ) throws {
@@ -514,7 +517,8 @@ func bitWriterFixedHuffmanSymbolsPreserveAdjacentFieldsAtEveryBitOffset(
   let output = writer.finish()
 
   let prefix = (UInt32(1) << bitOffset) - 1
-  let packed = prefix | (testCase.packedCode << bitOffset)
+  let packed =
+    prefix | (testCase.packedCode << bitOffset)
     | (UInt32(0b101) << (bitOffset + testCase.bitCount))
   let byteCount = (bitOffset + testCase.bitCount + 3 + 7) / 8
   let expected = (0..<byteCount).map { UInt8(truncatingIfNeeded: packed >> ($0 * 8)) }

@@ -67,7 +67,8 @@ func inflateDynamicAcceptsAnEmptyDistanceAlphabet(includeLiteral: Bool) throws {
 func inflateDynamicExpandsZeroRepeats(symbol: Int) throws {
   let runs: [HuffmanCodeLengthRun]
   if symbol == 16 {
-    runs = [run(0)] + Array(repeating: run(16, 3, 2), count: 42)
+    runs =
+      [run(0)] + Array(repeating: run(16, 3, 2), count: 42)
       + [run(16, 0, 2), run(1), run(0)]
   } else {
     runs = Array(repeating: run(17, 7, 3), count: 25) + [run(17, 3, 3), run(1), run(0)]
@@ -147,6 +148,8 @@ func inflateDynamicExpandsZeroRepeats(symbol: Int) throws {
   let bytes = output.span
   try #require(bytes.count == expected.count)
   #expect(expected.indices.allSatisfy { bytes[$0] == expected[$0] })
+  let compressed = (0..<encoded.count).map { encoded[$0] }
+  #expect(try inflateInChunks(compressed, inputChunkSize: 1, outputChunkSize: 17) == expected)
 }
 
 @Test func inflateReadsUnalignedFixedDynamicAndStoredBlocks() throws {
@@ -174,6 +177,8 @@ func inflateDynamicExpandsZeroRepeats(symbol: Int) throws {
   #expect(output[0] == 65)
   #expect(output[1] == 66)
   #expect(output[2] == 67)
+  let compressed = (0..<encoded.count).map { encoded[$0] }
+  #expect(try inflateInChunks(compressed, inputChunkSize: 1, outputChunkSize: 1) == Array("ABC".utf8))
 }
 
 @Test(arguments: [(287, 1), (288, 1), (257, 31), (257, 32)])
@@ -182,7 +187,7 @@ func inflateDynamicRejectsInvalidTableSizes(literalCount: Int, distanceCount: In
   writeTestDynamicHeader(to: &writer, literalCount: literalCount, distanceCount: distanceCount)
   let encoded = writer.finish()
 
-  #expect(throws: BitReaderError.invalid) {
+  #expect(throws: BitReaderError.invalidHuffmanTable) {
     _ = try ZLib.inflate(input: encoded.span)
   }
 }
@@ -198,7 +203,7 @@ func inflateDynamicRejectsInvalidCodeLengthTrees(codeLengths: [Int]) {
   writeTestDynamicHeader(to: &writer, codeLengths: codeLengths)
   let encoded = writer.finish()
 
-  #expect(throws: BitReaderError.invalid) {
+  #expect(throws: BitReaderError.invalidHuffmanTable) {
     _ = try ZLib.inflate(input: encoded.span)
   }
 }
@@ -214,7 +219,7 @@ func inflateDynamicRejectsInvalidLengthRepeats(runs: [HuffmanCodeLengthRun]) {
   writeTestDynamicHeader(to: &writer, runs: runs)
   let encoded = writer.finish()
 
-  #expect(throws: BitReaderError.invalid) {
+  #expect(throws: BitReaderError.invalidHuffmanTable) {
     _ = try ZLib.inflate(input: encoded.span)
   }
 }
@@ -239,7 +244,7 @@ func inflateDynamicRejectsInvalidDataTrees(testCase: Int) {
   writer.writeDynamicHuffmanHeader(literalLengths: lengths, distanceLengths: distances)
   let encoded = writer.finish()
 
-  #expect(throws: BitReaderError.invalid) {
+  #expect(throws: BitReaderError.invalidHuffmanTable) {
     _ = try ZLib.inflate(input: encoded.span)
   }
 }
@@ -257,7 +262,7 @@ func inflateDynamicRejectsMatchesWithoutAvailableHistory(emptyDistanceTable: Boo
   writer.writeHuffmanCode(0, bitCount: 1)
   let encoded = writer.finish()
 
-  #expect(throws: BitReaderError.invalid) {
+  #expect(throws: emptyDistanceTable ? InflateError.invalidHuffmanTable : .invalidDistance) {
     _ = try ZLib.inflate(input: encoded.span)
   }
 }

@@ -14,7 +14,7 @@ func storedLengthDecodesValidLittleEndianPairs(
 ) throws {
   var reader = BitReader(testCase.bytes.span.bytes)
 
-  let result = try reader.parseLenNLen()
+  let result = try reader.readStoredLength()
 
   #expect(result.len == testCase.len)
   #expect(result.nlen == testCase.nlen)
@@ -31,7 +31,7 @@ func storedLengthSkipsPaddingBits(bitOffset: Int, padding: UInt8) throws {
   var reader = BitReader(input.span.bytes)
   _ = try reader.readBits(8 + bitOffset)
 
-  let result = try reader.parseLenNLen()
+  let result = try reader.readStoredLength()
 
   #expect(result.len == 0x1234)
   #expect(result.nlen == 0xEDCB)
@@ -45,7 +45,7 @@ func storedLengthSkipsPaddingBits(bitOffset: Int, padding: UInt8) throws {
   var reader = BitReader(input.span.bytes)
   _ = try reader.readBits(8)
 
-  let result = try reader.parseLenNLen()
+  let result = try reader.readStoredLength()
 
   #expect(result.len == 0x1234)
   #expect(result.nlen == 0xEDCB)
@@ -64,8 +64,8 @@ func storedLengthSkipsPaddingBits(bitOffset: Int, padding: UInt8) throws {
 func storedLengthRejectsInvalidComplements(input: [UInt8]) {
   var reader = BitReader(input.span.bytes)
 
-  #expect(throws: BitReaderError.invalid) {
-    _ = try reader.parseLenNLen()
+  #expect(throws: BitReaderError.invalidStoredLength) {
+    _ = try reader.readStoredLength()
   }
 }
 
@@ -81,7 +81,7 @@ func storedLengthRejectsTruncatedAlignedInput(
   _ = try reader.readBits(completedBytes * 8)
 
   #expect(throws: BitReaderError.unexpectedEndOfInput) {
-    _ = try reader.parseLenNLen()
+    _ = try reader.readStoredLength()
   }
   #expect(reader.byteOffset == completedBytes)
   #expect(reader.bitOffset == 0)
@@ -97,7 +97,7 @@ func storedLengthRejectsTruncatedInputAfterPadding(
   _ = try reader.readBits(bitOffset)
 
   #expect(throws: BitReaderError.unexpectedEndOfInput) {
-    _ = try reader.parseLenNLen()
+    _ = try reader.readStoredLength()
   }
 }
 
@@ -105,12 +105,12 @@ func storedLengthRejectsTruncatedInputAfterPadding(
   // Final stored block, nonzero padding, LEN=3, NLEN=0xFFFC, payload="ABC".
   let input: [UInt8] = [0xF9, 0x03, 0x00, 0xFC, 0xFF, 0x41, 0x42, 0x43]
   var reader = BitReader(input.span.bytes)
-  let header = try reader.parseheader()
+  let header = try reader.readBlockHeader()
 
-  let result = try reader.parseLenNLen()
+  let result = try reader.readStoredLength()
 
-  #expect(header.bType == .stored)
-  #expect(header.isLastByte == true)
+  #expect(header.blockType == .stored)
+  #expect(header.isFinal == true)
   #expect(result.len == 3)
   #expect(result.nlen == 0xFFFC)
   #expect(reader.byteOffset == 5)
