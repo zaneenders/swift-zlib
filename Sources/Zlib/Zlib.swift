@@ -1,14 +1,27 @@
-/// Compression and decompression operations for raw DEFLATE streams.
+/// Compression and decompression operations for raw DEFLATE, zlib, and gzip streams.
 public enum ZLib: ~Sendable {
+  /// The container around the compressed DEFLATE data.
+  public enum Format: Equatable, Sendable {
+    /// Bare DEFLATE blocks without a header or checksum trailer.
+    case rawDeflate
+    /// Zlib framing with an Adler-32 checksum trailer.
+    case zlib
+    /// Gzip framing with CRC32 and uncompressed size validation.
+    case gzip
+  }
+
   /// Decompresses stored, fixed, and dynamic blocks into storage owned by the caller.
   ///
   /// Throws `InflateError.outputLimitExceeded` before a literal, match, or stored
-  /// block would exceed `maximumOutputSize`. Trailing bytes after the final block
-  /// are ignored. Use `Inflater` to inspect input consumption or process chunks.
+  /// block would exceed `maximumOutputSize`. Raw DEFLATE ignores trailing bytes.
+  /// Zlib validates one stream and rejects trailing bytes. Gzip validates all
+  /// concatenated members and rejects trailing garbage; its
+  /// output limit applies to their combined decoded size. Use `Inflater` to
+  /// inspect input consumption or process chunks.
   public static func inflate(
-    input: borrowing Span<UInt8>, maximumOutputSize: Int = .max
+    input: borrowing Span<UInt8>, format: Format = .rawDeflate, maximumOutputSize: Int = .max
   ) throws(InflateError) -> UniqueArray<UInt8> {
-    var inflater = try Inflater(maximumOutputSize: maximumOutputSize)
+    var inflater = try Inflater(format: format, maximumOutputSize: maximumOutputSize)
     var output = UniqueArray<UInt8>(minimumCapacity: min(input.count, maximumOutputSize, 65_536))
     var consumed = 0
     while true {
@@ -17,6 +30,9 @@ public enum ZLib: ~Sendable {
       }
       consumed += progress.inputConsumed
       if progress.status == .finished {
+        guard format != .zlib || consumed == input.count else {
+          throw .trailingData
+        }
         return output
       }
       let remaining = maximumOutputSize - output.count
@@ -42,10 +58,20 @@ public enum ZLib: ~Sendable {
     case dynamic
   }
 
-  /// Compresses a raw DEFLATE stream using the requested block strategy.
+  /// Compresses using the requested format and block strategy.
+  ///
+  /// Gzip output contains one member with no timestamp, filename, or comment.
   public static func deflate(
-    input: borrowing Span<UInt8>, strategy: Strategy
+    input: borrowing Span<UInt8>, format: Format = .rawDeflate, strategy: Strategy
   ) throws(BitWriterError) -> UniqueArray<UInt8> {
+    switch format {
+    case .gzip:
+      return try GzipEncoder.encode(input: input, strategy: strategy)
+    case .zlib:
+      return try ZlibEncoder.encode(input: input, strategy: strategy)
+    case .rawDeflate:
+      break
+    }
     switch strategy {
     case .stored: return try DeflateEncoder.stored(input: input)
     case .fixed: return try DeflateEncoder.fixed(input: input)

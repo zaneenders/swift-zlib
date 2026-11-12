@@ -1,11 +1,13 @@
 import Testing
 import zlib
 
-// A negative windowBits selects raw DEFLATE, matching the Swift API.
-func cZlibDeflate(_ input: [UInt8], level: Int32, strategy: Int32 = Z_FIXED) throws -> [UInt8] {
+// A negative windowBits selects raw DEFLATE; MAX_WBITS + 16 selects gzip.
+func cZlibDeflate(
+  _ input: [UInt8], level: Int32, strategy: Int32 = Z_FIXED, windowBits: Int32 = -MAX_WBITS
+) throws -> [UInt8] {
   var stream = z_stream()
   let initialized = deflateInit2_(
-    &stream, level, Z_DEFLATED, -MAX_WBITS, 8, strategy,
+    &stream, level, Z_DEFLATED, windowBits, 8, strategy,
     ZLIB_VERSION, Int32(MemoryLayout<z_stream>.size)
   )
   try #require(initialized == Z_OK)
@@ -26,10 +28,10 @@ func cZlibDeflate(_ input: [UInt8], level: Int32, strategy: Int32 = Z_FIXED) thr
   return Array(output.prefix(Int(stream.total_out)))
 }
 
-func cZlibInflate(_ input: [UInt8], expectedCount: Int) throws -> [UInt8] {
+func cZlibInflate(_ input: [UInt8], expectedCount: Int, windowBits: Int32 = -MAX_WBITS) throws -> [UInt8] {
   var stream = z_stream()
   let initialized = inflateInit2_(
-    &stream, -MAX_WBITS, ZLIB_VERSION, Int32(MemoryLayout<z_stream>.size)
+    &stream, windowBits, ZLIB_VERSION, Int32(MemoryLayout<z_stream>.size)
   )
   try #require(initialized == Z_OK)
   defer { _ = inflateEnd(&stream) }

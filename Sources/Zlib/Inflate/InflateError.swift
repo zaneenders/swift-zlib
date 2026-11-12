@@ -1,4 +1,4 @@
-/// Errors reported while reading and decompressing a raw DEFLATE stream.
+/// Errors reported while reading and decompressing raw DEFLATE, zlib, or gzip streams.
 public enum InflateError: Error, Equatable {
   case unexpectedEndOfInput
   case unsupportedBlockType
@@ -10,6 +10,14 @@ public enum InflateError: Error, Equatable {
   case invalidOutputLimit
   case invalidState
   case invalidBitCount
+  case invalidGzipHeader
+  case invalidZlibHeader
+  case unsupportedCompressionMethod
+  case unsupportedDictionary
+  case headerChecksumMismatch
+  case checksumMismatch
+  case sizeMismatch
+  case trailingData
   /// Retained for compatibility with earlier versions.
   case invalid
 }
