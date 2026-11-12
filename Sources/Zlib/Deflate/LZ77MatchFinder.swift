@@ -9,6 +9,16 @@ struct LZ77MatchFinder: ~Copyable {
   private var previous = [Int](repeating: -1, count: 32_768)
   private static let maximumCandidates = 128
 
+  /// Seeds a fresh finder with history at `0..<end` before encoding new input.
+  /// Lookahead may extend into new input, so the last two history positions can
+  /// participate in matches without inserting any new input positions.
+  mutating func seed(input: borrowing Span<UInt8>, end: Int) {
+    precondition(end >= 0 && end <= input.count)
+    for index in 0..<end where input.count - index >= 3 {
+      insert(input: input, at: index)
+    }
+  }
+
   /// Advances `position` by one literal or a match of up to 258 bytes.
   /// Matches may overlap and may refer into previous blocks.
   mutating func next(
@@ -40,14 +50,18 @@ struct LZ77MatchFinder: ~Copyable {
     }
     let consumed = bestDistance > 0 ? bestLength : 1
     for index in position..<(position + consumed) where input.count - index >= 3 {
-      let key = hash(input, at: index)
-      previous[index & 32_767] = heads[key]
-      heads[key] = index
+      insert(input: input, at: index)
     }
     let token: DeflateToken =
       bestDistance > 0 ? .match(length: bestLength, distance: bestDistance) : .literal(input[position])
     position += consumed
     return token
+  }
+
+  private mutating func insert(input: borrowing Span<UInt8>, at index: Int) {
+    let key = hash(input, at: index)
+    previous[index & 32_767] = heads[key]
+    heads[key] = index
   }
 
   private func hash(_ input: borrowing Span<UInt8>, at index: Int) -> Int {

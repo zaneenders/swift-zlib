@@ -13,6 +13,104 @@ private func expectBitWriterBytes(
   }
 }
 
+@Test func bitWriterDrainsADelayedCompleteByte() throws {
+  var writer = BitWriter(minimumCapacity: 0)
+  writer.writeBits(0xB6, count: 8)
+  #expect(writer.hasPendingBytes == true)
+
+  var noStorage = OutputSpan<UInt8>()
+  let noStorageDrained = writer.drain(output: &noStorage)
+  #expect(!noStorageDrained)
+  #expect(writer.hasPendingBytes == true)
+  var output = UniqueArray<UInt8>(capacity: 1)
+  let drained = output.edit { span in writer.drain(output: &span) }
+
+  #expect(drained)
+  #expect(writer.hasPendingBytes == false)
+  try expectBitWriterBytes(output, [0xB6])
+  let remaining = writer.finish()
+  try expectBitWriterBytes(remaining, [])
+}
+
+@Test(arguments: 1...7)
+func bitWriterPreservesPartialBitsAcrossDrains(bitCount: Int) throws {
+  var writer = BitWriter(minimumCapacity: 0)
+  writer.writeBits(0x69, count: 8)
+  writer.writeBits(0xB6, count: bitCount)
+  var first = UniqueArray<UInt8>(capacity: 1)
+  let firstDrained = first.edit { span in writer.drain(output: &span) }
+
+  #expect(firstDrained)
+  #expect(writer.hasPendingBytes == false)
+  try expectBitWriterBytes(first, [0x69])
+  var noStorage = OutputSpan<UInt8>()
+  let noStorageDrained = writer.drain(output: &noStorage)
+  #expect(noStorageDrained)
+
+  writer.writeBits(UInt8(0xB6) >> bitCount, count: 8 - bitCount)
+  var second = UniqueArray<UInt8>(capacity: 1)
+  let secondDrained = second.edit { span in writer.drain(output: &span) }
+
+  #expect(secondDrained)
+  try expectBitWriterBytes(second, [0xB6])
+  let remaining = writer.finish()
+  try expectBitWriterBytes(remaining, [])
+}
+
+@Test func bitWriterDrainsOnlyIntoFreeOutputCapacity() throws {
+  var writer = BitWriter(minimumCapacity: 0)
+  for byte: UInt8 in [0xB6, 0x69, 0xA5] {
+    writer.writeBits(byte, count: 8)
+  }
+  var first = UniqueArray<UInt8>(capacity: 3)
+  first.append(0x58)
+  let firstDrained = first.edit { span in writer.drain(output: &span) }
+
+  #expect(!firstDrained)
+  try expectBitWriterBytes(first, [0x58, 0xB6, 0x69])
+  var second = UniqueArray<UInt8>(capacity: 1)
+  let secondDrained = second.edit { span in writer.drain(output: &span) }
+  #expect(secondDrained)
+  try expectBitWriterBytes(second, [0xA5])
+}
+
+@Test func bitWriterCanRepeatedlyDrainOneByteAndWriteAgain() throws {
+  var writer = BitWriter(minimumCapacity: 1)
+  for pass in 0..<2 {
+    let expected = (0..<257).map { UInt8(truncatingIfNeeded: $0 + pass) }
+    for byte in expected {
+      writer.writeBits(byte, count: 8)
+    }
+    for index in expected.indices {
+      var output = UniqueArray<UInt8>(capacity: 1)
+      let drained = output.edit { span in writer.drain(output: &span) }
+      #expect(drained == (index == expected.count - 1))
+      #expect(writer.hasPendingBytes == !drained)
+      try expectBitWriterBytes(output, [expected[index]])
+    }
+  }
+  var noStorage = OutputSpan<UInt8>()
+  let noStorageDrained = writer.drain(output: &noStorage)
+  #expect(noStorageDrained)
+  let remaining = writer.finish()
+  try expectBitWriterBytes(remaining, [])
+}
+
+@Test func bitWriterFinishReturnsOnlyUndrainedBytesAndThePaddedTail() throws {
+  var writer = BitWriter(minimumCapacity: 0)
+  for byte: UInt8 in [0xB6, 0x69, 0xA5] {
+    writer.writeBits(byte, count: 8)
+  }
+  writer.writeBits(0b101, count: 3)
+  var output = UniqueArray<UInt8>(capacity: 1)
+  let drained = output.edit { span in writer.drain(output: &span) }
+
+  #expect(!drained)
+  try expectBitWriterBytes(output, [0xB6])
+  let remaining = writer.finish()
+  try expectBitWriterBytes(remaining, [0x69, 0xA5, 0x05])
+}
+
 @Test(arguments: [0, 1, 8])
 func bitWriterFinishesEmptyWithoutProducingBytes(minimumCapacity: Int) throws {
   let writer = BitWriter(minimumCapacity: minimumCapacity)

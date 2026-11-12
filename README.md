@@ -44,6 +44,52 @@ swift run --package-path Examples/GitObjects git-object /path/to/repo/.git/objec
 
 The example does not parse Git packfiles or verify object IDs.
 
+## Incremental compression
+
+`Deflater(format:strategy:)` accepts chunks through
+`process(input:output:flush:)` and reports `inputConsumed`, `outputProduced`, and
+a status. It supports all three formats and strategies, buffers input in blocks
+of up to 65,535 bytes, and retains a 32 KiB compression history across blocks.
+Only one encoded block waits for output capacity, so storage stays bounded as
+the stream grows.
+
+- `.none` accepts input and returns `.needsInput` when it needs another chunk.
+  A partial block may stay buffered.
+- `.sync` emits everything supplied so far and returns `.flushed`. A decoder
+  can read that prefix immediately, and compression can continue with its history.
+- `.finish` ends the stream, writes its checksum trailer, and returns `.finished`.
+
+Any operation can return `.needsOutput`. Advance by `inputConsumed` and retry
+with fresh output capacity. For a pending `.sync` or `.finish`, pass the same
+flush value and exactly the unconsumed input suffix, even when it is empty.
+Once that request completes, a sync-flushed stream can accept another chunk;
+a finished stream cannot. Discard the compressor after an error.
+
+```swift
+let chunks = [Array("Hello, ".utf8), Array("streaming gzip!".utf8)]
+var deflater = Deflater(format: .gzip, strategy: .dynamic)
+var compressed: [UInt8] = []
+
+for (index, chunk) in chunks.enumerated() {
+  let flush: Deflater.Flush = index == chunks.count - 1 ? .finish : .none
+  var offset = 0
+  var status = Deflater.Status.needsOutput
+  while status == .needsOutput {
+    let bytes = try [UInt8](capacity: 4096) { output in
+      let progress = try deflater.process(
+        input: chunk.span.extracting(offset...), output: &output, flush: flush)
+      offset += progress.inputConsumed
+      status = progress.status
+    }
+    // A file or network writer can consume these bytes directly.
+    compressed += bytes
+  }
+}
+```
+
+For an empty input source, call `.finish` with an empty span. Streaming and
+one-shot compression may choose different block boundaries and compressed bytes.
+
 ## Incremental decompression
 
 Create `Inflater(format: .gzip, maximumOutputSize: ...)` and call

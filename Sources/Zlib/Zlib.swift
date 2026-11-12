@@ -61,6 +61,7 @@ public enum ZLib: ~Sendable {
   /// Compresses using the requested format and block strategy.
   ///
   /// Gzip output contains one member with no timestamp, filename, or comment.
+  /// Use `Deflater` for bounded-memory compression, chunks, and sync flushes.
   public static func deflate(
     input: borrowing Span<UInt8>, format: Format = .rawDeflate, strategy: Strategy
   ) throws(BitWriterError) -> UniqueArray<UInt8> {

@@ -1,7 +1,11 @@
 struct BitWriter: ~Copyable {
   private var output: UniqueArray<UInt8>
+  private var readOffset = 0
   private var currentByte: UInt8 = 0
   private var bitOffset = 0
+
+  /// Whether at least one complete byte remains available for draining.
+  var hasPendingBytes: Bool { readOffset < output.count || bitOffset == 8 }
 
   init(minimumCapacity: Int) {
     self.output = UniqueArray<UInt8>(minimumCapacity: minimumCapacity)
@@ -72,8 +76,31 @@ struct BitWriter: ~Copyable {
     }
   }
 
+  /// Appends complete bytes to the caller's remaining output capacity.
+  /// Returns true when all complete bytes have drained; a partial byte stays
+  /// buffered without padding so subsequent fields can continue in that byte.
+  mutating func drain(output destination: inout OutputSpan<UInt8>) -> Bool {
+    if bitOffset == 8 {
+      alignToByte()
+    }
+    while readOffset < output.count && destination.count < destination.capacity {
+      destination.append(output[readOffset])
+      readOffset += 1
+    }
+    guard readOffset == output.count else { return false }
+    // Keep the allocation for the next block, without shifting bytes on each
+    // short drain when the caller supplies a small output span.
+    output.removeAll()
+    readOffset = 0
+    return true
+  }
+
+  /// Pads the final byte and returns only bytes not previously drained.
   consuming func finish() -> UniqueArray<UInt8> {
     alignToByte()
+    if readOffset > 0 {
+      output.removeSubrange(0..<readOffset)
+    }
     return output
   }
 
