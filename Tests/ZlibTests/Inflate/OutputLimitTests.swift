@@ -1,7 +1,7 @@
 import Testing
 import Zlib
 
-@Test(arguments: [ZLib.Strategy.stored, .fixed, .dynamic], [0, 1, 257, 258, 259, 999])
+@Test(arguments: [ZLib.Strategy.stored, .fixed, .dynamic, .automatic], [0, 1, 257, 258, 259, 999])
 func inflateRejectsOutputBeyondTheLimit(strategy: ZLib.Strategy, limit: Int) throws {
   let input = [UInt8](repeating: 90, count: 1_000)
   let compressed = try ZLib.deflate(input: input.span, strategy: strategy)
@@ -15,7 +15,7 @@ func inflateRejectsOutputBeyondTheLimit(strategy: ZLib.Strategy, limit: Int) thr
   }
 }
 
-@Test(arguments: [ZLib.Strategy.stored, .fixed, .dynamic])
+@Test(arguments: [ZLib.Strategy.stored, .fixed, .dynamic, .automatic])
 func inflateAcceptsExactlyTheOutputLimit(strategy: ZLib.Strategy) throws {
   let input = [UInt8](repeating: 90, count: 1_000)
   let compressed = try ZLib.deflate(input: input.span, strategy: strategy)
@@ -24,7 +24,7 @@ func inflateAcceptsExactlyTheOutputLimit(strategy: ZLib.Strategy) throws {
   #expect(input.indices.allSatisfy { decoded[$0] == input[$0] })
 }
 
-@Test(arguments: [ZLib.Strategy.stored, .fixed, .dynamic])
+@Test(arguments: [ZLib.Strategy.stored, .fixed, .dynamic, .automatic])
 func outputLimitAppliesAcrossBlocksAndChunks(strategy: ZLib.Strategy) throws {
   let input = [UInt8](repeating: 90, count: 65_537)
   let encoded = try ZLib.deflate(input: input.span, strategy: strategy)

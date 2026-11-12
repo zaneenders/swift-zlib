@@ -49,9 +49,19 @@ func huffmanCodeLengthRuns(lengths: [Int]) -> [HuffmanCodeLengthRun] {
   return runs
 }
 
-extension BitWriter {
-  /// Writes the dynamic tables after the block's BFINAL and BTYPE bits.
-  mutating func writeDynamicHuffmanHeader(literalLengths: [Int], distanceLengths: [Int]) {
+/// Prepared dynamic tables shared by block cost estimation and emission.
+struct DynamicHuffmanHeader {
+  private let literalCount: Int
+  private let distanceCount: Int
+  private let codeLengthCount: Int
+  private let lengths: [Int]
+  private let codes: [UInt16?]
+  private let runs: [HuffmanCodeLengthRun]
+
+  /// The exact encoded size after the block's BFINAL and BTYPE bits.
+  let bitCount: Int
+
+  init(literalLengths: [Int], distanceLengths: [Int]) {
     precondition((257...286).contains(literalLengths.count), "Invalid literal/length table size")
     precondition((1...30).contains(distanceLengths.count), "Invalid distance table size")
 
@@ -73,15 +83,37 @@ extension BitWriter {
       codeLengthCount -= 1
     }
 
-    writeBits(UInt8(literalLengths.count - 257), count: 5)
-    writeBits(UInt8(distanceLengths.count - 1), count: 5)
-    writeBits(UInt8(codeLengthCount - 4), count: 4)
-    for symbol in order.prefix(codeLengthCount) {
-      writeBits(UInt8(lengths[symbol]), count: 3)
+    self.literalCount = literalLengths.count
+    self.distanceCount = distanceLengths.count
+    self.codeLengthCount = codeLengthCount
+    self.lengths = lengths
+    self.codes = codes
+    self.runs = runs
+    var bitCount = 14 + 3 * codeLengthCount
+    for run in runs {
+      bitCount += lengths[run.symbol] + run.extraBitCount
+    }
+    self.bitCount = bitCount
+  }
+
+  func write(to writer: inout BitWriter) {
+    writer.writeBits(UInt8(literalCount - 257), count: 5)
+    writer.writeBits(UInt8(distanceCount - 1), count: 5)
+    writer.writeBits(UInt8(codeLengthCount - 4), count: 4)
+    for symbol in huffmanCodeLengthOrder.prefix(codeLengthCount) {
+      writer.writeBits(UInt8(lengths[symbol]), count: 3)
     }
     for run in runs {
-      writeHuffmanCode(codes[run.symbol]!, bitCount: lengths[run.symbol])
-      writeBits(run.extraBits, count: run.extraBitCount)
+      writer.writeHuffmanCode(codes[run.symbol]!, bitCount: lengths[run.symbol])
+      writer.writeBits(run.extraBits, count: run.extraBitCount)
     }
+  }
+}
+
+extension BitWriter {
+  /// Writes the dynamic tables after the block's BFINAL and BTYPE bits.
+  mutating func writeDynamicHuffmanHeader(literalLengths: [Int], distanceLengths: [Int]) {
+    let header = DynamicHuffmanHeader(literalLengths: literalLengths, distanceLengths: distanceLengths)
+    header.write(to: &self)
   }
 }

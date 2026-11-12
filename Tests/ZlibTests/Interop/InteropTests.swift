@@ -2,7 +2,7 @@ import Testing
 import Zlib
 import zlib
 
-@Test(arguments: [InteropPayload.text, .repeatedByte, .multipleBlocks], [ZLib.Strategy.fixed, .dynamic])
+@Test(arguments: [InteropPayload.text, .repeatedByte, .multipleBlocks], [ZLib.Strategy.fixed, .dynamic, .automatic])
 func lz77CompressionReducesRepetitivePayloads(payload: InteropPayload, strategy: ZLib.Strategy) throws {
   let input = payload.bytes
   let encoded = try ZLib.deflate(input: input.span, strategy: strategy)
@@ -11,7 +11,7 @@ func lz77CompressionReducesRepetitivePayloads(payload: InteropPayload, strategy:
   #expect(try cZlibInflate(compressed, expectedCount: input.count) == input)
 }
 
-@Test(arguments: InteropPayload.allCases, [ZLib.Strategy.stored, .fixed, .dynamic])
+@Test(arguments: InteropPayload.allCases, [ZLib.Strategy.stored, .fixed, .dynamic, .automatic])
 func swiftDeflateOutputIsDecodedByCZlib(payload: InteropPayload, strategy: ZLib.Strategy) throws {
   let input = payload.bytes
   let encoded = try ZLib.deflate(input: input.span, strategy: strategy)

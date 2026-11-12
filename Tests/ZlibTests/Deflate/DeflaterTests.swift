@@ -1,7 +1,7 @@
 import Testing
 import Zlib
 
-@Test(arguments: [ZLib.Format.rawDeflate, .zlib, .gzip], [ZLib.Strategy.stored, .fixed, .dynamic])
+@Test(arguments: [ZLib.Format.rawDeflate, .zlib, .gzip], [ZLib.Strategy.stored, .fixed, .dynamic, .automatic])
 func streamingDeflaterInteroperatesWithCZlibAcrossChunkSizes(format: ZLib.Format, strategy: ZLib.Strategy) throws {
   let input = Array(String(repeating: "Streaming compression: ABCABC!ZZZZZZZ\n", count: 3).utf8)
   for (inputChunk, outputChunk) in [(1, 1), (7, 17), (1_024, 4_096)] {
@@ -11,7 +11,7 @@ func streamingDeflaterInteroperatesWithCZlibAcrossChunkSizes(format: ZLib.Format
   }
 }
 
-@Test(arguments: [ZLib.Format.rawDeflate, .zlib, .gzip], [ZLib.Strategy.stored, .fixed, .dynamic])
+@Test(arguments: [ZLib.Format.rawDeflate, .zlib, .gzip], [ZLib.Strategy.stored, .fixed, .dynamic, .automatic])
 func streamingDeflaterFinishesEmptyAndExactBlockBoundaries(format: ZLib.Format, strategy: ZLib.Strategy) throws {
   for length in [0, 65_535, 65_536, 131_070] {
     let input = (0..<length).map { UInt8(truncatingIfNeeded: $0 * 37 + 11) }
@@ -25,7 +25,7 @@ func streamingDeflaterFinishesEmptyAndExactBlockBoundaries(format: ZLib.Format, 
   }
 }
 
-@Test(arguments: [ZLib.Format.rawDeflate, .zlib, .gzip], [ZLib.Strategy.stored, .fixed, .dynamic])
+@Test(arguments: [ZLib.Format.rawDeflate, .zlib, .gzip], [ZLib.Strategy.stored, .fixed, .dynamic, .automatic])
 func streamingDeflaterHandlesZeroOutputCapacity(format: ZLib.Format, strategy: ZLib.Strategy) throws {
   let input = Array("Resubmit the remaining input after backpressure".utf8)
   var deflater = Deflater(format: format, strategy: strategy)
@@ -56,7 +56,7 @@ func streamingDeflaterCountsExcludePreexistingOutput(format: ZLib.Format) throws
   #expect(try cZlibInflate(encoded, expectedCount: input.count, windowBits: deflaterWindowBits(format)) == input)
 }
 
-@Test(arguments: [ZLib.Format.rawDeflate, .zlib, .gzip], [ZLib.Strategy.stored, .fixed, .dynamic])
+@Test(arguments: [ZLib.Format.rawDeflate, .zlib, .gzip], [ZLib.Strategy.stored, .fixed, .dynamic, .automatic])
 func streamingDeflaterSyncIsReadableBeforeFinishAndRetryOutputIsStable(format: ZLib.Format, strategy: ZLib.Strategy)
   throws
 {
@@ -83,7 +83,7 @@ func streamingDeflaterSyncIsReadableBeforeFinishAndRetryOutputIsStable(format: Z
   }
 }
 
-@Test(arguments: [ZLib.Format.rawDeflate, .zlib, .gzip], [ZLib.Strategy.fixed, .dynamic])
+@Test(arguments: [ZLib.Format.rawDeflate, .zlib, .gzip], [ZLib.Strategy.fixed, .dynamic, .automatic])
 func streamingDeflaterRetainsMatchHistoryAcrossSync(format: ZLib.Format, strategy: ZLib.Strategy) throws {
   let input = Array(InteropPayload.pseudoRandom.bytes.prefix(8_192))
   var deflater = Deflater(format: format, strategy: strategy)
@@ -104,7 +104,7 @@ func streamingDeflaterRetainsMatchHistoryAcrossSync(format: ZLib.Format, strateg
     try cZlibInflate(encoded, expectedCount: input.count * 2, windowBits: deflaterWindowBits(format)) == input + input)
 }
 
-@Test(arguments: [ZLib.Strategy.fixed, .dynamic])
+@Test(arguments: [ZLib.Strategy.fixed, .dynamic, .automatic])
 func streamingDeflaterRetainsHistoryAcrossTheBlockBoundary(strategy: ZLib.Strategy) throws {
   let first = Array(InteropPayload.pseudoRandom.bytes.prefix(65_535))
   let repeated = Array(first.suffix(32_768))
@@ -170,7 +170,7 @@ func streamingDeflaterEmptyInputWithoutFlushCanLaterFinish(format: ZLib.Format) 
   #expect(try cZlibInflate(encoded, expectedCount: 0, windowBits: deflaterWindowBits(format)) == [])
 }
 
-@Test(arguments: [ZLib.Format.rawDeflate, .zlib, .gzip], [ZLib.Strategy.stored, .fixed, .dynamic])
+@Test(arguments: [ZLib.Format.rawDeflate, .zlib, .gzip], [ZLib.Strategy.stored, .fixed, .dynamic, .automatic])
 func streamingDeflaterFinishesAfterAnExactlyFullNonfinalBlock(format: ZLib.Format, strategy: ZLib.Strategy) throws {
   let input = (0..<65_535).map { UInt8(truncatingIfNeeded: $0 * 37 + 11) }
   var deflater = Deflater(format: format, strategy: strategy)
@@ -183,7 +183,7 @@ func streamingDeflaterFinishesAfterAnExactlyFullNonfinalBlock(format: ZLib.Forma
   #expect(try cZlibInflate(encoded, expectedCount: input.count, windowBits: deflaterWindowBits(format)) == input)
 }
 
-@Test(arguments: [ZLib.Format.rawDeflate, .zlib, .gzip], [ZLib.Strategy.stored, .fixed, .dynamic])
+@Test(arguments: [ZLib.Format.rawDeflate, .zlib, .gzip], [ZLib.Strategy.stored, .fixed, .dynamic, .automatic])
 func streamingDeflaterSupportsRepeatedEmptySyncRequests(format: ZLib.Format, strategy: ZLib.Strategy) throws {
   var deflater = Deflater(format: format, strategy: strategy)
   var encoded: [UInt8] = []
@@ -205,7 +205,7 @@ func streamingDeflaterSupportsRepeatedEmptySyncRequests(format: ZLib.Format, str
   #expect(try cZlibInflate(encoded, expectedCount: expected.count, windowBits: deflaterWindowBits(format)) == expected)
 }
 
-@Test(arguments: [ZLib.Format.rawDeflate, .zlib, .gzip], [ZLib.Strategy.stored, .fixed, .dynamic])
+@Test(arguments: [ZLib.Format.rawDeflate, .zlib, .gzip], [ZLib.Strategy.stored, .fixed, .dynamic, .automatic])
 func streamingDeflaterAcceptsAtMostOneBlockWithoutOutputSpace(format: ZLib.Format, strategy: ZLib.Strategy) throws {
   let input = (0..<(65_535 * 3)).map { UInt8(truncatingIfNeeded: $0 * 37 + 11) }
   var deflater = Deflater(format: format, strategy: strategy)

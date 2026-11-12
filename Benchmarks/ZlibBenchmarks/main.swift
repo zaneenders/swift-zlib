@@ -33,7 +33,7 @@ let payloads: [(String, [UInt8])] = [
 print("payload,strategy,input_bytes,compressed_bytes,ratio,encode_mib_s,decode_mib_s")
 for (name, input) in payloads {
   for (strategyName, strategy) in [
-    ("stored", ZLib.Strategy.stored), ("fixed", .fixed), ("dynamic", .dynamic)
+    ("stored", ZLib.Strategy.stored), ("fixed", .fixed), ("dynamic", .dynamic), ("automatic", .automatic)
   ] {
     let encoded = try ZLib.deflate(input: input.span, strategy: strategy)
     let decoded = try ZLib.inflate(input: encoded.span)

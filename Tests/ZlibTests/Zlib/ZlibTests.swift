@@ -2,7 +2,7 @@ import Testing
 import Zlib
 import zlib
 
-@Test(arguments: InteropPayload.allCases, [ZLib.Strategy.stored, .fixed, .dynamic])
+@Test(arguments: InteropPayload.allCases, [ZLib.Strategy.stored, .fixed, .dynamic, .automatic])
 func swiftZlibOutputIsDecodedByCZlib(payload: InteropPayload, strategy: ZLib.Strategy) throws {
   let input = payload.bytes
   let encoded = try ZLib.deflate(input: input.span, format: .zlib, strategy: strategy)
@@ -21,7 +21,7 @@ func swiftZlibInflateDecodesCZlibOutput(payload: InteropPayload, level: Int32) t
   #expect(input.indices.allSatisfy { decoded[$0] == input[$0] })
 }
 
-@Test(arguments: [ZLib.Strategy.stored, .fixed, .dynamic])
+@Test(arguments: [ZLib.Strategy.stored, .fixed, .dynamic, .automatic])
 func zlibEmptyStreamsFinishWithoutOutputStorage(strategy: ZLib.Strategy) throws {
   let empty: [UInt8] = []
   let encoded = try ZLib.deflate(input: empty.span, format: .zlib, strategy: strategy)
@@ -38,7 +38,7 @@ func zlibEmptyStreamsFinishWithoutOutputStorage(strategy: ZLib.Strategy) throws 
   #expect(decoded.count == 0)
 }
 
-@Test(arguments: [ZLib.Strategy.stored, .fixed, .dynamic], [(1, 1), (1, 17), (7, 257), (4_096, 13)])
+@Test(arguments: [ZLib.Strategy.stored, .fixed, .dynamic, .automatic], [(1, 1), (1, 17), (7, 257), (4_096, 13)])
 func zlibResumesAcrossInputAndOutputChunks(strategy: ZLib.Strategy, chunks: (Int, Int)) throws {
   let input = Array(String(repeating: "ABCABC!ZZZZZZZ\n", count: 100).utf8)
   let encoded = try ZLib.deflate(input: input.span, format: .zlib, strategy: strategy)
@@ -163,7 +163,7 @@ func zlibHonorsTheAdvertisedWindowSize(windowAndDistance: (UInt8, Int), level: U
   }
 }
 
-@Test(arguments: [ZLib.Strategy.stored, .fixed, .dynamic])
+@Test(arguments: [ZLib.Strategy.stored, .fixed, .dynamic, .automatic])
 func zlibEnforcesTheOutputLimitAndAcceptsAnExactFit(strategy: ZLib.Strategy) throws {
   let input = [UInt8](repeating: 90, count: 1_000)
   let encoded = try ZLib.deflate(input: input.span, format: .zlib, strategy: strategy)

@@ -2,7 +2,7 @@ import Testing
 import Zlib
 import zlib
 
-@Test(arguments: InteropPayload.allCases, [ZLib.Strategy.stored, .fixed, .dynamic])
+@Test(arguments: InteropPayload.allCases, [ZLib.Strategy.stored, .fixed, .dynamic, .automatic])
 func swiftGzipOutputIsDecodedByCZlib(payload: InteropPayload, strategy: ZLib.Strategy) throws {
   let input = payload.bytes
   let encoded = try ZLib.deflate(input: input.span, format: .gzip, strategy: strategy)
@@ -22,7 +22,7 @@ func swiftGzipInflateDecodesCZlibOutput(payload: InteropPayload, level: Int32) t
   #expect(input.indices.allSatisfy { decoded[$0] == input[$0] })
 }
 
-@Test(arguments: [ZLib.Strategy.stored, .fixed, .dynamic])
+@Test(arguments: [ZLib.Strategy.stored, .fixed, .dynamic, .automatic])
 func gzipEncodingIsDeterministic(strategy: ZLib.Strategy) throws {
   let input = Array("A reproducible gzip stream".utf8)
   let first = try ZLib.deflate(input: input.span, format: .gzip, strategy: strategy)
@@ -103,7 +103,7 @@ func gzipRejectsIncorrectTrailers(distanceFromEnd: Int, expectedError: InflateEr
   }
 }
 
-@Test(arguments: [ZLib.Strategy.stored, .fixed, .dynamic])
+@Test(arguments: [ZLib.Strategy.stored, .fixed, .dynamic, .automatic])
 func gzipDecodesConcatenatedMembersIncludingEmptyMembers(strategy: ZLib.Strategy) throws {
   let first = Array("first member".utf8)
   let second = Array("second member".utf8)
@@ -135,7 +135,7 @@ func gzipDecodesConcatenatedMembersIncludingEmptyMembers(strategy: ZLib.Strategy
       == input + input)
 }
 
-@Test(arguments: [ZLib.Strategy.stored, .fixed, .dynamic], [(1, 1), (1, 17), (7, 257)])
+@Test(arguments: [ZLib.Strategy.stored, .fixed, .dynamic, .automatic], [(1, 1), (1, 17), (7, 257)])
 func gzipResumesAcrossInputAndOutputChunks(strategy: ZLib.Strategy, chunks: (Int, Int)) throws {
   let input = Array(String(repeating: "ABCABC!ZZZZZZZ\n", count: 100).utf8)
   let encoded = try ZLib.deflate(input: input.span, format: .gzip, strategy: strategy)
@@ -187,7 +187,7 @@ func gzipResumesAcrossInputAndOutputChunks(strategy: ZLib.Strategy, chunks: (Int
   #expect(inflater.totalOutputCount == input.count)
 }
 
-@Test(arguments: [ZLib.Strategy.stored, .fixed, .dynamic])
+@Test(arguments: [ZLib.Strategy.stored, .fixed, .dynamic, .automatic])
 func gzipCanDecodeEmptyMembersWithoutOutputStorage(strategy: ZLib.Strategy) throws {
   let empty: [UInt8] = []
   let member = try ZLib.deflate(input: empty.span, format: .gzip, strategy: strategy)

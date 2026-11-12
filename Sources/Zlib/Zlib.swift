@@ -50,6 +50,12 @@ public enum ZLib: ~Sendable {
   }
 
   public enum Strategy: Sendable {
+    /// Chooses the smallest stored, fixed, or dynamic encoding for each block.
+    /// Uses one LZ77 parse per block of up to 65,535 bytes, including headers
+    /// and any final or sync-flush padding in the cost. Equal costs prefer
+    /// stored, then fixed, then dynamic. This favors size for the chosen blocks
+    /// and matches, and builds dynamic tables even when another encoding wins.
+    case automatic
     /// Stored blocks without compression.
     case stored
     /// LZ77 matches encoded with the fixed Huffman alphabet.
@@ -61,9 +67,11 @@ public enum ZLib: ~Sendable {
   /// Compresses using the requested format and block strategy.
   ///
   /// Gzip output contains one member with no timestamp, filename, or comment.
+  /// The default `.automatic` strategy compares encoded bit costs per block.
+  /// Explicit strategies preserve their existing block layouts.
   /// Use `Deflater` for bounded-memory compression, chunks, and sync flushes.
   public static func deflate(
-    input: borrowing Span<UInt8>, format: Format = .rawDeflate, strategy: Strategy
+    input: borrowing Span<UInt8>, format: Format = .rawDeflate, strategy: Strategy = .automatic
   ) throws(BitWriterError) -> UniqueArray<UInt8> {
     switch format {
     case .gzip:
@@ -74,6 +82,7 @@ public enum ZLib: ~Sendable {
       break
     }
     switch strategy {
+    case .automatic: return try DeflateEncoder.automatic(input: input)
     case .stored: return try DeflateEncoder.stored(input: input)
     case .fixed: return try DeflateEncoder.fixed(input: input)
     case .dynamic: return try DeflateEncoder.dynamic(input: input)

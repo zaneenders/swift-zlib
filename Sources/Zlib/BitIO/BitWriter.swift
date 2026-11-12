@@ -4,6 +4,9 @@ struct BitWriter: ~Copyable {
   private var currentByte: UInt8 = 0
   private var bitOffset = 0
 
+  /// The position within the current byte, including after a delayed full byte.
+  var bitPosition: Int { bitOffset & 7 }
+
   /// Whether at least one complete byte remains available for draining.
   var hasPendingBytes: Bool { readOffset < output.count || bitOffset == 8 }
 

@@ -1,7 +1,7 @@
 import Testing
 import Zlib
 
-@Test(arguments: [ZLib.Strategy.stored, .fixed, .dynamic], [(1, 1), (1, 17), (2, 1), (7, 257), (4_096, 13)])
+@Test(arguments: [ZLib.Strategy.stored, .fixed, .dynamic, .automatic], [(1, 1), (1, 17), (2, 1), (7, 257), (4_096, 13)])
 func inflaterResumesAcrossInputAndOutputChunks(strategy: ZLib.Strategy, chunks: (Int, Int)) throws {
   let input = Array(String(repeating: "ABCABC!ZZZZZZZ\n", count: 100).utf8)
   let encoded = try ZLib.deflate(input: input.span, strategy: strategy)
@@ -12,7 +12,7 @@ func inflaterResumesAcrossInputAndOutputChunks(strategy: ZLib.Strategy, chunks: 
   #expect(decoded == input)
 }
 
-@Test(arguments: [ZLib.Strategy.stored, .fixed, .dynamic])
+@Test(arguments: [ZLib.Strategy.stored, .fixed, .dynamic, .automatic])
 func inflaterCanFinishEmptyStreamsWithoutOutputStorage(strategy: ZLib.Strategy) throws {
   let input: [UInt8] = []
   let encoded = try ZLib.deflate(input: input.span, strategy: strategy)

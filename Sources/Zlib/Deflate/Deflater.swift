@@ -54,7 +54,8 @@ public struct Deflater: ~Copyable, ~Sendable {
   private var crc = CRC32()
 
   /// Creates a compressor. Gzip uses a reproducible header without metadata.
-  public init(format: ZLib.Format = .rawDeflate, strategy: ZLib.Strategy) {
+  /// The default `.automatic` strategy compares encoded bit costs per block.
+  public init(format: ZLib.Format = .rawDeflate, strategy: ZLib.Strategy = .automatic) {
     self.format = format
     self.strategy = strategy
     switch format {
@@ -153,7 +154,7 @@ public struct Deflater: ~Copyable, ~Sendable {
         writeTrailer()
         phase = .finishing
       } else if allInputAccepted && requestedFlush == .sync {
-        if buffer.count > historyCount { try writeBlock(isFinal: false) }
+        if buffer.count > historyCount { try writeBlock(isFinal: false, syncFlush: true) }
         // An empty stored block aligns the stream without resetting history.
         writer.writeBits(0, count: 3)
         writer.alignToByte()
@@ -169,19 +170,23 @@ public struct Deflater: ~Copyable, ~Sendable {
     }
   }
 
-  private mutating func writeBlock(isFinal: Bool) throws(DeflateError) {
+  private mutating func writeBlock(isFinal: Bool, syncFlush: Bool = false) throws(DeflateError) {
     do {
       switch strategy {
       case .stored:
         DeflateEncoder.writeStoredBlock(
           input: buffer.span.extracting(historyCount...), isFinal: isFinal, writer: &writer)
-      case .fixed, .dynamic:
+      case .automatic, .fixed, .dynamic:
         // Rebase the bounded window each block, including hashes that cross
         // from the end of the retained history into the new input.
         var finder = LZ77MatchFinder()
         finder.seed(input: buffer.span, end: historyCount)
         var position = historyCount
         switch strategy {
+        case .automatic:
+          try DeflateEncoder.writeAutomaticBlock(
+            input: buffer.span, position: &position, end: buffer.count,
+            isFinal: isFinal, syncFlush: syncFlush, finder: &finder, writer: &writer)
         case .fixed:
           try DeflateEncoder.writeFixedBlock(
             input: buffer.span, position: &position, end: buffer.count,
@@ -201,7 +206,7 @@ public struct Deflater: ~Copyable, ~Sendable {
     let retained: Int
     switch strategy {
     case .stored: retained = 0
-    case .fixed, .dynamic: retained = min(buffer.count, 32_768)
+    case .automatic, .fixed, .dynamic: retained = min(buffer.count, 32_768)
     }
     let start = buffer.count - retained
     for index in 0..<retained { buffer[index] = buffer[start + index] }

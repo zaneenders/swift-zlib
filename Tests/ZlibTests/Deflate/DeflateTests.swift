@@ -74,7 +74,7 @@ func deflateHandlesStoredLengthBoundaries(
 
 @Test(
   arguments: [0, 1, 8, 256, 1_024, 65_535, 65_536, 65_537, 131_070, 131_071, 196_605],
-  [ZLib.Strategy.stored, .fixed, .dynamic]
+  [ZLib.Strategy.stored, .fixed, .dynamic, .automatic]
 )
 func deflateRoundTripsThroughInflate(length: Int, strategy: ZLib.Strategy) throws {
   let input = (0..<length).map { UInt8(truncatingIfNeeded: $0 * 37 + 11) }
@@ -129,7 +129,8 @@ func deflateSplitsInputIntoStoredBlocks(testCase: (length: Int, blockLengths: [I
   arguments: [7, 65_536],
   [
     (ZLib.Strategy.stored, [UInt8(0x01), 0x03, 0x00, 0xFC, 0xFF, 0x41, 0x42, 0x43]),
-    (ZLib.Strategy.fixed, [UInt8(0x73), 0x74, 0x72, 0x06, 0x00])
+    (ZLib.Strategy.fixed, [UInt8(0x73), 0x74, 0x72, 0x06, 0x00]),
+    (ZLib.Strategy.automatic, [UInt8(0x73), 0x74, 0x72, 0x06, 0x00])
   ]
 )
 func deflateReadsOnlyTheSuppliedSpanWithinAnAllocation(
@@ -149,7 +150,8 @@ func deflateReadsOnlyTheSuppliedSpanWithinAnAllocation(
 @Test(
   arguments: [
     (.stored, [0x01, 0x01, 0x00, 0xFE, 0xFF, 0x41], 5),
-    (.fixed, [0x73, 0x04, 0x00], 1)
+    (.fixed, [0x73, 0x04, 0x00], 1),
+    (.automatic, [0x73, 0x04, 0x00], 1)
   ] as [(strategy: ZLib.Strategy, expected: [UInt8], mutationIndex: Int)])
 func deflateReturnsMutableOutputThatOutlivesInput(
   testCase: (strategy: ZLib.Strategy, expected: [UInt8], mutationIndex: Int)
