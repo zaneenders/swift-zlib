@@ -1,6 +1,6 @@
 # swift-zlib
 
-Pure Swift DEFLATE, zlib, and gzip compression. Requires Swift 6.4 and macOS 27+.
+Pure Swift DEFLATE, zlib, and gzip compression.
 
 ```swift
 import Zlib
