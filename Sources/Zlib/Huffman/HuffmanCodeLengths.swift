@@ -2,7 +2,8 @@ import HeapModule
 
 /// Builds initial Huffman code lengths without enforcing a bit-length limit.
 /// Unused symbols have length zero; a single used symbol has length one.
-func huffmanCodeLengths(frequencies: [Int]) -> [Int] {
+/// Replaces `lengths`, reusing its capacity when possible.
+func huffmanCodeLengths(frequencies: [Int], into lengths: inout [Int]) {
   var tree = [HuffmanNode?](repeating: nil, count: frequencies.count)
   var heap = Heap<HuffmanHeapEntry>()
 
@@ -31,9 +32,10 @@ func huffmanCodeLengths(frequencies: [Int]) -> [Int] {
     heap.insert(HuffmanHeapEntry(frequency: frequency, nodeIndex: index))
   }
 
-  var lengths = [Int](repeating: 0, count: frequencies.count)
+  lengths.removeAll(keepingCapacity: true)
+  lengths.append(contentsOf: repeatElement(0, count: frequencies.count))
   guard let root = heap.popMin() else {
-    return lengths
+    return
   }
   var pending: [(index: Int, depth: Int)] = [(root.nodeIndex, 0)]
 
@@ -50,18 +52,17 @@ func huffmanCodeLengths(frequencies: [Int]) -> [Int] {
       }
     }
   }
-
-  return lengths
 }
 
 /// Limits a Huffman tree's depth while preserving its symbols and prefix property.
-func huffmanCodeLengths(frequencies: [Int], maxBits: Int) -> [Int] {
+/// Replaces `lengths`, reusing its capacity when possible.
+func huffmanCodeLengths(frequencies: [Int], maxBits: Int, into lengths: inout [Int]) {
   precondition((1...15).contains(maxBits), "Invalid Huffman bit-length limit")
 
-  var lengths = huffmanCodeLengths(frequencies: frequencies)
+  huffmanCodeLengths(frequencies: frequencies, into: &lengths)
   let longest = lengths.max() ?? 0
   guard longest > maxBits else {
-    return lengths
+    return
   }
 
   let symbols = frequencies.indices.filter { frequencies[$0] > 0 }.sorted {
@@ -97,10 +98,10 @@ func huffmanCodeLengths(frequencies: [Int], maxBits: Int) -> [Int] {
       symbolIndex += 1
     }
   }
-  return lengths
 }
 
-func canonicalHuffmanCodes(lengths: [Int]) -> [UInt16?] {
+/// Replaces `codes` with canonical assignments, reusing its capacity when possible.
+func canonicalHuffmanCodes(lengths: [Int], into codes: inout [UInt16?]) {
   precondition(lengths.allSatisfy { (0...15).contains($0) }, "Invalid Huffman code length")
 
   let maxLength = lengths.max() ?? 0
@@ -118,11 +119,10 @@ func canonicalHuffmanCodes(lengths: [Int]) -> [UInt16?] {
     nextCode[bits] = UInt16(code)
   }
 
-  var codes = [UInt16?](repeating: nil, count: lengths.count)
+  codes.removeAll(keepingCapacity: true)
+  codes.append(contentsOf: repeatElement(nil as UInt16?, count: lengths.count))
   for (symbol, length) in lengths.enumerated() where length > 0 {
     codes[symbol] = nextCode[length]
     nextCode[length] += 1
   }
-
-  return codes
 }

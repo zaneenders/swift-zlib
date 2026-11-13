@@ -23,9 +23,22 @@ import Testing
 func canonicalHuffmanCodesMatchKnownAssignments(
   testCase: (lengths: [Int], expected: [UInt16?])
 ) {
-  let codes = canonicalHuffmanCodes(lengths: testCase.lengths)
+  var codes: [UInt16?] = []
+  canonicalHuffmanCodes(lengths: testCase.lengths, into: &codes)
 
   #expect(codes == testCase.expected)
+}
+
+@Test func canonicalHuffmanCodesReplaceReusedOutput() {
+  var codes: [UInt16?] = [99, 99, 99, 99]
+  canonicalHuffmanCodes(lengths: [1, 2, 2], into: &codes)
+  #expect(codes == [0, 2, 3])
+  canonicalHuffmanCodes(lengths: [0, 1, 0], into: &codes)
+  #expect(codes == [nil, 0, nil])
+  canonicalHuffmanCodes(lengths: [0, 0], into: &codes)
+  #expect(codes == [nil, nil])
+  canonicalHuffmanCodes(lengths: [], into: &codes)
+  #expect(codes.isEmpty)
 }
 
 @Test func canonicalHuffmanCodesForAABIncludeTheEndMarker() {
@@ -34,8 +47,10 @@ func canonicalHuffmanCodesMatchKnownAssignments(
   frequencies[66] = 1
   frequencies[256] = 1
 
-  let lengths = huffmanCodeLengths(frequencies: frequencies)
-  let codes = canonicalHuffmanCodes(lengths: lengths)
+  var lengths: [Int] = []
+  huffmanCodeLengths(frequencies: frequencies, into: &lengths)
+  var codes: [UInt16?] = []
+  canonicalHuffmanCodes(lengths: lengths, into: &codes)
 
   var expected = [UInt16?](repeating: nil, count: 286)
   expected[65] = 0
@@ -48,8 +63,10 @@ func canonicalHuffmanCodesMatchKnownAssignments(
   var frequencies = [Int](repeating: 0, count: 286)
   frequencies[256] = 1
 
-  let lengths = huffmanCodeLengths(frequencies: frequencies)
-  let codes = canonicalHuffmanCodes(lengths: lengths)
+  var lengths: [Int] = []
+  huffmanCodeLengths(frequencies: frequencies, into: &lengths)
+  var codes: [UInt16?] = []
+  canonicalHuffmanCodes(lengths: lengths, into: &codes)
 
   var expected = [UInt16?](repeating: nil, count: 286)
   expected[256] = 0

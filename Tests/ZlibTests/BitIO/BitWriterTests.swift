@@ -552,8 +552,10 @@ func bitWriterZeroLengthHuffmanCodePreservesPosition(prefixLength: Int) throws {
   frequencies[65] = 2
   frequencies[66] = 1
   frequencies[256] = 1
-  let lengths = huffmanCodeLengths(frequencies: frequencies)
-  let codes = canonicalHuffmanCodes(lengths: lengths)
+  var lengths: [Int] = []
+  huffmanCodeLengths(frequencies: frequencies, into: &lengths)
+  var codes: [UInt16?] = []
+  canonicalHuffmanCodes(lengths: lengths, into: &codes)
   var writer = BitWriter(minimumCapacity: 0)
 
   for symbol in [65, 65, 66, 256] {

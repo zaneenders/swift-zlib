@@ -26,8 +26,10 @@ func dynamicHuffmanHeaderEncodesZeroRunBoundaries(
   testCase: (count: Int, expected: [HuffmanCodeLengthRun])
 ) {
   let lengths = [Int](repeating: 0, count: testCase.count)
+  var runs: [HuffmanCodeLengthRun] = []
+  huffmanCodeLengthRuns(lengths: lengths, into: &runs)
 
-  #expect(huffmanCodeLengthRuns(lengths: lengths) == testCase.expected)
+  #expect(runs == testCase.expected)
 }
 
 @Test(
@@ -45,8 +47,10 @@ func dynamicHuffmanHeaderEncodesNonzeroRunBoundaries(
   testCase: (count: Int, expected: [HuffmanCodeLengthRun])
 ) {
   let lengths = [Int](repeating: 5, count: testCase.count)
+  var runs: [HuffmanCodeLengthRun] = []
+  huffmanCodeLengthRuns(lengths: lengths, into: &runs)
 
-  #expect(huffmanCodeLengthRuns(lengths: lengths) == testCase.expected)
+  #expect(runs == testCase.expected)
 }
 
 @Test func dynamicHuffmanHeaderKeepsDifferentLengthRunsSeparate() {
@@ -56,7 +60,19 @@ func dynamicHuffmanHeaderEncodesNonzeroRunBoundaries(
     codeLengthRun(3), codeLengthRun(16, 0, 2)
   ]
 
-  #expect(huffmanCodeLengthRuns(lengths: lengths) == expected)
+  var runs: [HuffmanCodeLengthRun] = []
+  huffmanCodeLengthRuns(lengths: lengths, into: &runs)
+  #expect(runs == expected)
+}
+
+@Test func dynamicHuffmanHeaderReplacesReusedRuns() {
+  var runs = [codeLengthRun(99)]
+  huffmanCodeLengthRuns(lengths: [5, 5, 5, 5], into: &runs)
+  #expect(runs == [codeLengthRun(5), codeLengthRun(16, 0, 2)])
+  huffmanCodeLengthRuns(lengths: [0, 0, 0], into: &runs)
+  #expect(runs == [codeLengthRun(17, 0, 3)])
+  huffmanCodeLengthRuns(lengths: [], into: &runs)
+  #expect(runs.isEmpty)
 }
 
 @Test func dynamicHuffmanHeaderCountsTheEmptyStreamAlphabet() {
@@ -71,16 +87,16 @@ func dynamicHuffmanHeaderEncodesNonzeroRunBoundaries(
 
 @Test(arguments: 0..<4, 0...7)
 func dynamicHuffmanHeaderCostMatchesUnpaddedEmission(testCase: Int, initialBitPosition: Int) {
-  let literalLengths: [Int]
-  let distanceLengths: [Int]
+  var literalLengths: [Int] = []
+  var distanceLengths: [Int] = []
   switch testCase {
   case 0:
     literalLengths = [Int](repeating: 0, count: 256) + [1]
     distanceLengths = [1]
   case 1:
     // Dense alphabets include runs encoded with repeat symbol 16.
-    literalLengths = huffmanCodeLengths(frequencies: [Int](repeating: 1, count: 286), maxBits: 15)
-    distanceLengths = huffmanCodeLengths(frequencies: [Int](repeating: 1, count: 30), maxBits: 15)
+    huffmanCodeLengths(frequencies: [Int](repeating: 1, count: 286), maxBits: 15, into: &literalLengths)
+    huffmanCodeLengths(frequencies: [Int](repeating: 1, count: 30), maxBits: 15, into: &distanceLengths)
   case 2:
     // Sparse alphabets exercise both short and long zero repeats.
     var literals = [Int](repeating: 0, count: 286)
@@ -89,8 +105,8 @@ func dynamicHuffmanHeaderCostMatchesUnpaddedEmission(testCase: Int, initialBitPo
     }
     var distances = [Int](repeating: 0, count: 30)
     for index in [0, 4, 29] { distances[index] = 1 }
-    literalLengths = huffmanCodeLengths(frequencies: literals, maxBits: 15)
-    distanceLengths = huffmanCodeLengths(frequencies: distances, maxBits: 15)
+    huffmanCodeLengths(frequencies: literals, maxBits: 15, into: &literalLengths)
+    huffmanCodeLengths(frequencies: distances, maxBits: 15, into: &distanceLengths)
   default:
     // A single run symbol requires a second symbol to complete the header tree.
     // This tests header encoding alone, not a valid literal/length data alphabet.

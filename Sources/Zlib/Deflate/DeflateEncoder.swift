@@ -187,11 +187,16 @@ private struct DynamicDeflateBlock: ~Copyable {
     }
     let literalCount = max(257, literalFrequencies.lastIndex(where: { $0 > 0 })! + 1)
     let distanceCount = distanceFrequencies.lastIndex(where: { $0 > 0 })! + 1
-    let literalLengths = huffmanCodeLengths(frequencies: Array(literalFrequencies.prefix(literalCount)), maxBits: 15)
-    let distanceLengths = huffmanCodeLengths(
-      frequencies: Array(distanceFrequencies.prefix(distanceCount)), maxBits: 15)
-    let literalCodes = canonicalHuffmanCodes(lengths: literalLengths)
-    let distanceCodes = canonicalHuffmanCodes(lengths: distanceLengths)
+    var literalLengths: [Int] = []
+    huffmanCodeLengths(
+      frequencies: Array(literalFrequencies.prefix(literalCount)), maxBits: 15, into: &literalLengths)
+    var distanceLengths: [Int] = []
+    huffmanCodeLengths(
+      frequencies: Array(distanceFrequencies.prefix(distanceCount)), maxBits: 15, into: &distanceLengths)
+    var literalCodes: [UInt16?] = []
+    canonicalHuffmanCodes(lengths: literalLengths, into: &literalCodes)
+    var distanceCodes: [UInt16?] = []
+    canonicalHuffmanCodes(lengths: distanceLengths, into: &distanceCodes)
     let header = DynamicHuffmanHeader(literalLengths: literalLengths, distanceLengths: distanceLengths)
     var bitCount = 3 + header.bitCount + analysis.extraBitCount
     for symbol in literalLengths.indices {

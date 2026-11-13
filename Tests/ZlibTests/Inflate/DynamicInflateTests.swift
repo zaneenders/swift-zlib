@@ -31,7 +31,8 @@ private func writeTestDynamicHeader(
     writer.writeBits(UInt8(codeLengths[symbol]), count: 3)
   }
   if !runs.isEmpty {
-    let codes = canonicalHuffmanCodes(lengths: codeLengths)
+    var codes: [UInt16?] = []
+    canonicalHuffmanCodes(lengths: codeLengths, into: &codes)
     for run in runs {
       writer.writeHuffmanCode(codes[run.symbol]!, bitCount: codeLengths[run.symbol])
       writer.writeBits(run.extraBits, count: run.extraBitCount)

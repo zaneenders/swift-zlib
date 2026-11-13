@@ -17,7 +17,8 @@ import Testing
 func huffmanCodeLengthsMatchKnownTrees(
   testCase: (frequencies: [Int], expected: [Int])
 ) {
-  let lengths = huffmanCodeLengths(frequencies: testCase.frequencies)
+  var lengths: [Int] = []
+  huffmanCodeLengths(frequencies: testCase.frequencies, into: &lengths)
 
   #expect(lengths == testCase.expected)
 }
@@ -28,7 +29,8 @@ func huffmanCodeLengthsMatchKnownTrees(
   frequencies[66] = 1
   frequencies[256] = 1
 
-  let lengths = huffmanCodeLengths(frequencies: frequencies)
+  var lengths: [Int] = []
+  huffmanCodeLengths(frequencies: frequencies, into: &lengths)
 
   var expected = [Int](repeating: 0, count: 286)
   expected[65] = 1
@@ -41,7 +43,8 @@ func huffmanCodeLengthsMatchKnownTrees(
   var frequencies = [Int](repeating: 0, count: 286)
   frequencies[256] = 1
 
-  let lengths = huffmanCodeLengths(frequencies: frequencies)
+  var lengths: [Int] = []
+  huffmanCodeLengths(frequencies: frequencies, into: &lengths)
 
   var expected = [Int](repeating: 0, count: 286)
   expected[256] = 1
@@ -54,7 +57,8 @@ func huffmanCodeLengthsMatchKnownTrees(
     frequencies[symbol] = 1
   }
 
-  let lengths = huffmanCodeLengths(frequencies: frequencies)
+  var lengths: [Int] = []
+  huffmanCodeLengths(frequencies: frequencies, into: &lengths)
 
   #expect(lengths.count == 286)
   #expect(lengths.prefix(257).filter { $0 == 8 }.count == 255)
@@ -75,9 +79,28 @@ func huffmanCodeLengthsMatchKnownTrees(
 func huffmanCodeLengthsRespectBitLengthLimits(
   testCase: (frequencies: [Int], maxBits: Int, expected: [Int])
 ) {
-  let lengths = huffmanCodeLengths(frequencies: testCase.frequencies, maxBits: testCase.maxBits)
+  var lengths: [Int] = []
+  huffmanCodeLengths(frequencies: testCase.frequencies, maxBits: testCase.maxBits, into: &lengths)
 
   #expect(lengths == testCase.expected)
+}
+
+@Test(arguments: [false, true])
+func huffmanCodeLengthsReplaceReusedOutput(limited: Bool) {
+  var lengths = [99, 99, 99, 99]
+  for (frequencies, expected) in [
+    ([5, 9, 12, 13, 16, 45], [4, 4, 3, 3, 3, 1]),
+    ([0, 7, 0], [0, 1, 0]),
+    ([0, 0], [0, 0]),
+    ([], [])
+  ] {
+    if limited {
+      huffmanCodeLengths(frequencies: frequencies, maxBits: 7, into: &lengths)
+    } else {
+      huffmanCodeLengths(frequencies: frequencies, into: &lengths)
+    }
+    #expect(lengths == expected)
+  }
 }
 
 @Test(arguments: [7, 15])
@@ -87,10 +110,12 @@ func huffmanCodeLengthLimitsPreserveACompleteTreeForSkewedFrequencies(maxBits: I
     frequencies.append(frequencies[frequencies.count - 2] + frequencies[frequencies.count - 1])
   }
   frequencies.append(0)
-  let original = huffmanCodeLengths(frequencies: frequencies)
+  var original: [Int] = []
+  huffmanCodeLengths(frequencies: frequencies, into: &original)
   try #require((original.max() ?? 0) > maxBits)
 
-  let lengths = huffmanCodeLengths(frequencies: frequencies, maxBits: maxBits)
+  var lengths: [Int] = []
+  huffmanCodeLengths(frequencies: frequencies, maxBits: maxBits, into: &lengths)
 
   #expect(lengths.count == frequencies.count)
   #expect(lengths.first == 0)
@@ -99,6 +124,7 @@ func huffmanCodeLengthLimitsPreserveACompleteTreeForSkewedFrequencies(maxBits: I
   #expect(used.allSatisfy { (1...maxBits).contains($0) })
   // Kraft equality independently checks that the lengths describe a full tree.
   #expect(used.reduce(0) { $0 + (1 << (maxBits - $1)) } == (1 << maxBits))
-  let codes = canonicalHuffmanCodes(lengths: lengths)
+  var codes: [UInt16?] = []
+  canonicalHuffmanCodes(lengths: lengths, into: &codes)
   #expect(codes.compactMap { $0 }.count == 20)
 }

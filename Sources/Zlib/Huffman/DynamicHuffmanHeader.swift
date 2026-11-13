@@ -7,9 +7,10 @@ struct HuffmanCodeLengthRun: Equatable {
 }
 
 /// Encodes code lengths using DEFLATE's repeat symbols 16, 17, and 18.
-func huffmanCodeLengthRuns(lengths: [Int]) -> [HuffmanCodeLengthRun] {
+/// Replaces `runs`, reusing its capacity when possible.
+func huffmanCodeLengthRuns(lengths: [Int], into runs: inout [HuffmanCodeLengthRun]) {
   precondition(lengths.allSatisfy { (0...15).contains($0) }, "Invalid Huffman code length")
-  var runs: [HuffmanCodeLengthRun] = []
+  runs.removeAll(keepingCapacity: true)
   var index = 0
 
   while index < lengths.count {
@@ -45,8 +46,6 @@ func huffmanCodeLengthRuns(lengths: [Int]) -> [HuffmanCodeLengthRun] {
       runs.append(.init(symbol: length, extraBits: 0, extraBitCount: 0))
     }
   }
-
-  return runs
 }
 
 /// Prepared dynamic tables shared by block cost estimation and emission.
@@ -65,7 +64,8 @@ struct DynamicHuffmanHeader {
     precondition((257...286).contains(literalLengths.count), "Invalid literal/length table size")
     precondition((1...30).contains(distanceLengths.count), "Invalid distance table size")
 
-    let runs = huffmanCodeLengthRuns(lengths: literalLengths + distanceLengths)
+    var runs: [HuffmanCodeLengthRun] = []
+    huffmanCodeLengthRuns(lengths: literalLengths + distanceLengths, into: &runs)
     var frequencies = [Int](repeating: 0, count: 19)
     for run in runs {
       frequencies[run.symbol] += 1
@@ -74,8 +74,10 @@ struct DynamicHuffmanHeader {
     if frequencies.filter({ $0 > 0 }).count == 1 {
       frequencies[frequencies[0] == 0 ? 0 : 1] = 1
     }
-    let lengths = huffmanCodeLengths(frequencies: frequencies, maxBits: 7)
-    let codes = canonicalHuffmanCodes(lengths: lengths)
+    var lengths: [Int] = []
+    huffmanCodeLengths(frequencies: frequencies, maxBits: 7, into: &lengths)
+    var codes: [UInt16?] = []
+    canonicalHuffmanCodes(lengths: lengths, into: &codes)
 
     let order = huffmanCodeLengthOrder
     var codeLengthCount = order.count
