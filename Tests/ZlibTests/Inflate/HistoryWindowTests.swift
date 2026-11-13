@@ -100,3 +100,33 @@ func historyRejectsUnavailableDistances(distance: Int) {
   #expect(history.count == 2)
   #expect(history.writeIndex == 2)
 }
+
+@Test(arguments: [1, 3, 8, 32_768], [0, 1, 2, 7, 8, 9, 65_535])
+func bulkHistoryMatchesLiteralAppends(capacity: Int, length: Int) throws {
+  var bulk = HistoryWindow(capacity: capacity)
+  var reference = HistoryWindow(capacity: capacity)
+  let input = (0..<(length + 2)).map { UInt8(truncatingIfNeeded: $0 * 37) }
+  for byte in input.prefix(2) {
+    bulk.appendLiteral(byte)
+    reference.appendLiteral(byte)
+  }
+  bulk.append(contentsOf: input.span.extracting(2...))
+  for byte in input.dropFirst(2) { reference.appendLiteral(byte) }
+
+  #expect(bulk.count == reference.count)
+  #expect(bulk.writeIndex == reference.writeIndex)
+  for offset in 0..<reference.count {
+    #expect(try bulk.byte(distance: offset + 1) == reference.byte(distance: offset + 1))
+  }
+}
+
+@Test func bulkHistoryCanFillAnEmptyWindow() throws {
+  var history = HistoryWindow(capacity: 3)
+  let input = Array("ABCDEFGH".utf8)
+  history.append(contentsOf: input.span)
+
+  #expect(history.count == 3)
+  #expect(history.writeIndex == 2)
+  #expect(try history.byte(distance: 1) == 0x48)
+  #expect(try history.byte(distance: 3) == 0x46)
+}

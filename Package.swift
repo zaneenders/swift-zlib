@@ -22,7 +22,7 @@ let package = Package(
     .library(name: "Zlib", targets: ["Zlib"])
   ],
   dependencies: [
-    .package(url: "https://github.com/apple/swift-collections.git", from: "1.7.0")
+    .package(url: "https://github.com/apple/swift-collections.git", from: "1.7.6")
   ],
   targets: [
     .target(

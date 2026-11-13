@@ -25,10 +25,12 @@ struct BitWriter: ~Copyable {
   mutating func writeHuffmanCode(_ code: UInt16, bitCount: Int) {
     precondition((0...UInt16.bitWidth).contains(bitCount), "Invalid Huffman code bit count")
 
-    for index in (0..<bitCount).reversed() {
-      let bit = UInt8((code >> index) & 1)
-      writeBits(bit, count: 1)
-    }
+    var reversed = code
+    reversed = ((reversed & 0x5555) << 1) | ((reversed >> 1) & 0x5555)
+    reversed = ((reversed & 0x3333) << 2) | ((reversed >> 2) & 0x3333)
+    reversed = ((reversed & 0x0F0F) << 4) | ((reversed >> 4) & 0x0F0F)
+    reversed = (reversed << 8) | (reversed >> 8)
+    writeExtraBits(reversed >> (16 - bitCount), count: bitCount)
   }
 
   mutating func writeFixedLiteralLengthSymbol(_ symbol: UInt32) throws(BitWriterError) {
@@ -56,18 +58,22 @@ struct BitWriter: ~Copyable {
   }
 
   mutating func writeBits(_ bits: UInt8, count: Int) {
-    var bits = bits
-    for _ in 0..<count {
-      if bitOffset == 8 {
-        output.append(currentByte)
-        currentByte = 0
-        bitOffset = 0
-      }
-      var bit = bits & 1
-      bits >>= 1
-      bit <<= bitOffset
-      currentByte |= bit
-      bitOffset += 1
+    precondition((0...8).contains(count))
+    guard count > 0 else { return }
+    if bitOffset == 8 {
+      output.append(currentByte)
+      currentByte = 0
+      bitOffset = 0
+    }
+    let mask = (UInt16(1) << count) - 1
+    let packed = UInt16(currentByte) | ((UInt16(bits) & mask) << bitOffset)
+    bitOffset += count
+    if bitOffset > 8 {
+      output.append(UInt8(truncatingIfNeeded: packed))
+      currentByte = UInt8(packed >> 8)
+      bitOffset -= 8
+    } else {
+      currentByte = UInt8(truncatingIfNeeded: packed)
     }
   }
 
@@ -77,6 +83,12 @@ struct BitWriter: ~Copyable {
       currentByte = 0
       bitOffset = 0
     }
+  }
+
+  /// Appends a stored payload after its header has aligned the stream.
+  mutating func writeBytes(_ bytes: borrowing Span<UInt8>) {
+    precondition(bitOffset == 0)
+    output.append(copying: bytes)
   }
 
   /// Appends complete bytes to the caller's remaining output capacity.

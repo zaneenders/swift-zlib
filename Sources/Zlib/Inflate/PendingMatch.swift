@@ -17,20 +17,8 @@ struct PendingMatch: ~Copyable, ~Sendable {
     into output: inout OutputSpan<UInt8>,
     history: inout HistoryWindow
   ) throws(HistoryWindowError) -> Int {
-    guard remaining >= 0 else {
-      throw .invalidLength
-    }
-    guard distance > 0 && distance <= history.count else {
-      throw .invalidDistance
-    }
-    var count = 0
-    while remaining > 0 && output.count < output.capacity {
-      let byte = try history.byte(distance: distance)
-      output.append(byte)
-      history.appendLiteral(byte)
-      count += 1
-      remaining -= 1
-    }
+    let count = try history.copyMatch(distance: distance, length: remaining, into: &output)
+    remaining -= count
     return count
   }
 }

@@ -14,14 +14,13 @@ struct PendingStoredBlock: ~Copyable, ~Sendable {
     into output: inout OutputSpan<UInt8>,
     history: inout HistoryWindow
   ) throws(BitReaderError) -> Int {
-    var produced = 0
-    while remaining > 0 && output.count < output.capacity {
-      let byte = UInt8(try reader.readBits(8))
-      output.append(byte)
-      history.appendLiteral(byte)
-      remaining -= 1
-      produced += 1
+    let initialCount = output.count
+    defer {
+      let bytes = output.span.extracting(initialCount...)
+      history.append(contentsOf: bytes)
+      remaining -= UInt16(bytes.count)
     }
-    return produced
+    try reader.copyBytes(count: min(Int(remaining), output.freeCapacity), into: &output)
+    return output.count - initialCount
   }
 }

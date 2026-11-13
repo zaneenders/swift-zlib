@@ -13,6 +13,34 @@ import Testing
   #expect(position == input.count)
 }
 
+@Test(arguments: 3...258)
+func matchFinderStopsAtEveryMismatchWithinAWord(length: Int) {
+  let prefix = (0..<258).map { UInt8(truncatingIfNeeded: $0) }
+  var input = prefix + prefix
+  if length < prefix.count { input[prefix.count + length] ^= 0xFF }
+  var finder = LZ77MatchFinder()
+  finder.seed(input: input.span, end: prefix.count)
+  var position = prefix.count
+
+  #expect(
+    finder.next(input: input.span, position: &position, end: input.count)
+      == .match(length: length, distance: prefix.count))
+  #expect(position == prefix.count + length)
+}
+
+@Test(arguments: [3, 7, 8, 9, 15, 16, 17, 257, 258])
+func matchFinderStopsAtTheBlockEndWithMatchingLookahead(length: Int) {
+  let input = [UInt8](repeating: 90, count: 512)
+  var finder = LZ77MatchFinder()
+  finder.seed(input: input.span, end: 1)
+  var position = 1
+
+  #expect(
+    finder.next(input: input.span, position: &position, end: 1 + length)
+      == .match(length: length, distance: 1))
+  #expect(position == 1 + length)
+}
+
 @Test(arguments: [32_768, 32_769])
 func matchFinderHonorsTheHistoryWindow(distance: Int) {
   let prefix = [UInt8(65), 66, 67] + [UInt8](repeating: 0, count: distance - 3)

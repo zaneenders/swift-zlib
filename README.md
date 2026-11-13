@@ -22,6 +22,5 @@ swift test
 swift run --package-path Benchmarks -c release ZlibBenchmarks --update-readme
 ```
 
-[Benchmarks against C zlib and methodology](Benchmarks/README.md).
 
-⚠️ slower than C
+## [Benchmarks against C zlib and methodology](Benchmarks/README.md).

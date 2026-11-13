@@ -55,9 +55,8 @@ enum DeflateEncoder: ~Sendable {
     let length = UInt16(input.count)
     writer.writeUInt16LittleEndian(length)
     writer.writeUInt16LittleEndian(~length)
-    for byte in input {
-      writer.writeBits(byte, count: 8)
-    }
+    writer.alignToByte()
+    writer.writeBytes(input)
   }
 
   /// Appends a fixed-Huffman block using the supplied match history.

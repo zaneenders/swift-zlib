@@ -92,3 +92,44 @@ func storedBlockResumesInAnotherOutputChunk(firstCapacity: Int) throws {
   #expect(history.count == 2)
   #expect(try history.byte(distance: 1) == 0x42)
 }
+
+@Test(arguments: [1, 2, 3, 4])
+func storedBlockCopiesBufferedBytesBeforeDirectInput(capacity: Int) throws {
+  let input = Array("CD!".utf8)
+  var reader = BitReader(input.span.bytes, bufferedBits: BufferedBits(value: 0x4241, count: 16))
+  var history = HistoryWindow(capacity: 3)
+  var block = PendingStoredBlock(length: 4)
+  let first = try [UInt8](capacity: capacity) { output in
+    try block.emit(from: &reader, into: &output, history: &history)
+  }
+  let second = try [UInt8](capacity: 4 - capacity) { output in
+    try block.emit(from: &reader, into: &output, history: &history)
+  }
+
+  #expect(first + second == Array("ABCD".utf8))
+  #expect(block.isComplete == true)
+  #expect(reader.byteOffset == 2)
+  #expect(try reader.readBits(8) == 0x21)
+  #expect(try history.byte(distance: 1) == 0x44)
+  #expect(try history.byte(distance: 3) == 0x42)
+}
+
+@Test func storedBlockRetainsBufferedProgressWhenDirectInputIsTruncated() throws {
+  let input = Array("B".utf8)
+  var reader = BitReader(input.span.bytes, bufferedBits: BufferedBits(value: 0x41, count: 8))
+  var history = HistoryWindow(capacity: 3)
+  var block = PendingStoredBlock(length: 3)
+  var output = UniqueArray<UInt8>(capacity: 3)
+  #expect(throws: BitReaderError.unexpectedEndOfInput) {
+    try output.edit { (span: inout OutputSpan<UInt8>) throws(BitReaderError) in
+      try block.emit(from: &reader, into: &span, history: &history)
+    }
+  }
+
+  #expect(output.count == 2)
+  #expect(output[0] == 0x41 && output[1] == 0x42)
+  #expect(block.remaining == 1)
+  #expect(reader.byteOffset == 1)
+  #expect(history.count == 2)
+  #expect(try history.byte(distance: 1) == 0x42)
+}

@@ -1,3 +1,5 @@
+import BasicContainers
+
 enum DeflateToken: Equatable, Sendable {
   case literal(UInt8)
   case match(length: Int, distance: Int)
@@ -5,8 +7,8 @@ enum DeflateToken: Equatable, Sendable {
 
 /// A bounded hash-chain search over the previous 32 KiB of input.
 struct LZ77MatchFinder: ~Copyable {
-  private var heads = [Int](repeating: -1, count: 65_536)
-  private var previous = [Int](repeating: -1, count: 32_768)
+  private var heads = RigidArray<Int>(repeating: -1, count: 65_536)
+  private var previous = RigidArray<Int>(repeating: -1, count: 32_768)
   private static let maximumCandidates = 128
 
   /// Seeds a fresh finder with history at `0..<end` before encoding new input.
@@ -35,6 +37,16 @@ struct LZ77MatchFinder: ~Copyable {
       while candidate >= oldest && searched < Self.maximumCandidates {
         if input[candidate + bestLength] == input[position + bestLength] {
           var length = 0
+          while maximumLength - length >= 8 {
+            let difference =
+              input.bytes.load(fromByteOffset: candidate + length, as: UInt64.self)
+              ^ input.bytes.load(fromByteOffset: position + length, as: UInt64.self)
+            if difference != 0 {
+              length += difference.littleEndian.trailingZeroBitCount / 8
+              break
+            }
+            length += 8
+          }
           while length < maximumLength && input[candidate + length] == input[position + length] {
             length += 1
           }

@@ -70,6 +70,22 @@ struct BitReader: ~Copyable, ~Escapable {
     throw .invalidHuffmanTable
   }
 
+  /// Copies whole bytes, retaining any progress if the input is truncated.
+  mutating func copyBytes(count: Int, into output: inout OutputSpan<UInt8>) throws(BitReaderError) {
+    precondition(count >= 0 && count <= output.freeCapacity)
+    var remaining = count
+    // A suspended field can leave whole bytes in the bit buffer. Drain those
+    // first; stored blocks otherwise copy directly from their aligned input.
+    while remaining > 0 && (bufferedBits.count > 0 || bitOffset != 0) {
+      output.append(UInt8(try readBits(8)))
+      remaining -= 1
+    }
+    let available = min(remaining, input.byteCount - byteOffset)
+    output.appendBytes(Span(viewing: input.extracting(byteOffset..<(byteOffset + available))))
+    byteOffset += available
+    guard available == remaining else { throw .unexpectedEndOfInput }
+  }
+
   /// Reads the extra bits for an already-decoded length symbol.
   mutating func readMatchLength(symbol code: UInt32) throws(BitReaderError) -> UInt32 {
     guard (257...285).contains(code) else {
