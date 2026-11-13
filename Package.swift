@@ -22,13 +22,16 @@ let package = Package(
     .library(name: "Zlib", targets: ["Zlib"])
   ],
   dependencies: [
-    .package(url: "https://github.com/apple/swift-collections.git", from: "1.7.6")
+    .package(
+      url: "https://github.com/apple/swift-collections.git", from: "1.7.6",
+      traits: ["UnstableContainersPreview"])
   ],
   targets: [
     .target(
       name: "Zlib",
       dependencies: [
         .product(name: "BasicContainers", package: "swift-collections"),
+        .product(name: "ContainersPreview", package: "swift-collections"),
         .product(name: "HeapModule", package: "swift-collections")
       ],
       swiftSettings: swiftSettings
