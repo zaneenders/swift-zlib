@@ -46,6 +46,51 @@ func huffmanDecoderRejectsInvalidTrees(
   #expect(reader.bitOffset == 7)
 }
 
+@Test(arguments: 0...7)
+func huffmanDecoderReadsEveryCodeAcrossRootAndSubtables(offset: Int) throws {
+  let lengths = Array(1...14) + [15, 15]
+  let decoder = try HuffmanDecoder(lengths: lengths, alphabet: .literalLength)
+  var codes: [UInt16?] = []
+  canonicalHuffmanCodes(lengths: lengths, into: &codes)
+  var writer = BitWriter(minimumCapacity: 0)
+  writer.writeBits(0, count: offset)
+  for symbol in lengths.indices {
+    writer.writeHuffmanCode(codes[symbol]!, bitCount: lengths[symbol])
+  }
+  writer.writeBits(0b10101, count: 5)
+  let input = writer.finish()
+  var reader = BitReader(input.span.bytes)
+  _ = try reader.readBits(offset)
+
+  for symbol in lengths.indices {
+    #expect(try decoder.readSymbol(from: &reader) == UInt32(symbol))
+  }
+  #expect(try reader.readBits(5) == 0b10101)
+}
+
+@Test func huffmanDecoderAcceptsAShortCodeWithOneBitRemaining() throws {
+  let decoder = try HuffmanDecoder(lengths: Array(1...14) + [15, 15], alphabet: .literalLength)
+  let input: [UInt8] = [0]
+  var reader = BitReader(input.span.bytes)
+  _ = try reader.readBits(7)
+
+  #expect(try decoder.readSymbol(from: &reader) == 0)
+  #expect(reader.byteOffset == 1)
+  #expect(reader.bitOffset == 0)
+}
+
+@Test(arguments: 0..<15)
+func huffmanDecoderDoesNotTreatMissingLookaheadAsCodeBits(available: Int) throws {
+  let decoder = try HuffmanDecoder(lengths: Array(1...14) + [15, 15], alphabet: .literalLength)
+  let input: [UInt8] = []
+  let prefix = BufferedBits(value: UInt64.max >> (64 - available), count: available)
+  var reader = BitReader(input.span.bytes, bufferedBits: prefix)
+
+  #expect(throws: BitReaderError.unexpectedEndOfInput) {
+    _ = try decoder.readSymbol(from: &reader)
+  }
+}
+
 @Test func huffmanDecoderRejectsAnUnusedOneBitCode() throws {
   let decoder = try HuffmanDecoder(lengths: [0, 1, 0], alphabet: .distance)
   let input: [UInt8] = [0x01]

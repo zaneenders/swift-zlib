@@ -2,13 +2,20 @@
 struct BitReader: ~Copyable, ~Escapable {
   private let input: RawSpan
   private var bufferedBits: BufferedBits
+  // Bits inherited from a previous chunk precede this input's logical offsets.
+  private var prefixBitCount: Int
+  // Refilling may advance beyond byteOffset; only consumed bits are reported.
+  private var nextByteOffset = 0
   private(set) var byteOffset = 0
   private(set) var bitOffset = 0
 
   @_lifetime(copy input)
   init(_ input: RawSpan, bufferedBits: BufferedBits = BufferedBits()) {
+    precondition((0...64).contains(bufferedBits.count))
     self.input = input
-    self.bufferedBits = bufferedBits
+    self.bufferedBits = BufferedBits(
+      value: bufferedBits.value & (UInt64.max >> (64 - bufferedBits.count)), count: bufferedBits.count)
+    self.prefixBitCount = bufferedBits.count
   }
 
   /// Reads 0...32 bits, placing the first bit read in bit 0 of the result.
@@ -17,57 +24,51 @@ struct BitReader: ~Copyable, ~Escapable {
     guard (0...32).contains(bitCount) else {
       throw .invalidBitCount
     }
-    var nextByteOffset = byteOffset
-    var nextBitOffset = bitOffset
-    var nextBufferedBits = bufferedBits
-    var out: UInt32 = 0
-
-    for resultBitIndex in 0..<bitCount {
-      if nextBufferedBits.count > 0 {
-        out |= UInt32(nextBufferedBits.value & 1) << resultBitIndex
-        nextBufferedBits.value >>= 1
-        nextBufferedBits.count -= 1
-        continue
-      }
-      guard nextByteOffset < input.byteCount else {
-        throw .unexpectedEndOfInput
-      }
-      let byte = input[nextByteOffset]
-      let bit = (byte >> nextBitOffset) & 1
-      out |= UInt32(bit) << resultBitIndex
-
-      nextBitOffset += 1
-      if nextBitOffset == 8 {
-        nextBitOffset = 0
-        nextByteOffset += 1
-      }
-    }
-
-    byteOffset = nextByteOffset
-    bitOffset = nextBitOffset
-    bufferedBits = nextBufferedBits
-    return out
+    let bits = peekBits(upTo: bitCount)
+    guard bits.count == bitCount else { throw .unexpectedEndOfInput }
+    dropBits(bitCount)
+    return bits.value
   }
 
-  mutating func readFixedLiteralLengthSymbol() throws(BitReaderError) -> UInt32 {
-    var code: UInt32 = 0
-
-    for bitCount in 1...9 {
-      let bit = try readBits(1)
-      code = (code << 1) | bit
-
-      if bitCount >= 7 {
-        switch (bitCount, code) {
-        case (7, 0...23): return 256 + code
-        case (8, 48...191): return code - 48
-        case (8, 192...197): return 280 + code - 192
-        case (8, 198...199): throw .forbiddenSymbol
-        case (9, 400...511): return 144 + code - 400
-        default: continue
+  /// Looks ahead without consuming input. Missing high bits are zero, and
+  /// `count` reports how many bits are actually available at the end of input.
+  @inline(__always)
+  mutating func peekBits(upTo bitCount: Int) -> (value: UInt32, count: Int) {
+    precondition((0...32).contains(bitCount))
+    if bufferedBits.count < bitCount {
+      if input.byteCount - nextByteOffset >= 4 {
+        // Fewer than 32 bits are buffered here, so another word fits in UInt64.
+        let word = input.load(fromByteOffset: nextByteOffset, as: UInt32.self).littleEndian
+        bufferedBits.value |= UInt64(word) << bufferedBits.count
+        bufferedBits.count += 32
+        nextByteOffset += 4
+      } else {
+        while bufferedBits.count < bitCount && nextByteOffset < input.byteCount {
+          appendBuffered(UInt64(input[nextByteOffset]), count: 8)
+          nextByteOffset += 1
         }
       }
     }
-    throw .invalidHuffmanTable
+    let mask = UInt64.max >> (64 - bitCount)
+    return (UInt32(truncatingIfNeeded: bufferedBits.value & mask), min(bitCount, bufferedBits.count))
+  }
+
+  @inline(__always)
+  mutating func dropBits(_ bitCount: Int) {
+    precondition(bitCount >= 0 && bitCount <= bufferedBits.count)
+    bufferedBits.value >>= bitCount
+    bufferedBits.count -= bitCount
+    let prefix = min(bitCount, prefixBitCount)
+    prefixBitCount -= prefix
+    let position = bitOffset + bitCount - prefix
+    byteOffset += position >> 3
+    bitOffset = position & 7
+  }
+
+  mutating func readFixedLiteralLengthSymbol() throws(BitReaderError) -> UInt32 {
+    let symbol = try HuffmanDecoder.fixedLiteralLength.readSymbol(from: &self)
+    guard symbol < 286 else { throw .forbiddenSymbol }
+    return symbol
   }
 
   /// Copies whole bytes, retaining any progress if the input is truncated.
@@ -76,13 +77,18 @@ struct BitReader: ~Copyable, ~Escapable {
     var remaining = count
     // A suspended field can leave whole bytes in the bit buffer. Drain those
     // first; stored blocks otherwise copy directly from their aligned input.
-    while remaining > 0 && (bufferedBits.count > 0 || bitOffset != 0) {
+    while remaining > 0 && (prefixBitCount > 0 || bitOffset != 0) {
       output.append(UInt8(try readBits(8)))
       remaining -= 1
     }
+    guard remaining > 0 else { return }
     let available = min(remaining, input.byteCount - byteOffset)
     output.appendBytes(Span(viewing: input.extracting(byteOffset..<(byteOffset + available))))
     byteOffset += available
+    // Bulk copying bypasses the lookahead buffer. Resume refilling at the new
+    // logical position, leaving prefetched but unconsumed bytes in the input.
+    bufferedBits = BufferedBits()
+    nextByteOffset = byteOffset
     guard available == remaining else { throw .unexpectedEndOfInput }
   }
 
@@ -96,12 +102,8 @@ struct BitReader: ~Copyable, ~Escapable {
   }
 
   mutating func readFixedMatchDistance() throws(BitReaderError) -> UInt32 {
-    var code: UInt32 = 0
-
-    for _ in 0..<5 {
-      let bit = try readBits(1)
-      code = (code << 1) | bit
-    }
+    let bits = try readBits(5)
+    let code = ((bits & 1) << 4) | ((bits & 2) << 2) | (bits & 4) | ((bits & 8) >> 2) | ((bits & 16) >> 4)
     return try readMatchDistance(symbol: code)
   }
 
@@ -115,16 +117,8 @@ struct BitReader: ~Copyable, ~Escapable {
   }
 
   mutating func alignToByte() {
-    if bufferedBits.count > 0 {
-      let padding = bufferedBits.count % 8
-      bufferedBits.value >>= padding
-      bufferedBits.count -= padding
-      return
-    }
-    if bitOffset != 0 {
-      bitOffset = 0
-      byteOffset += 1
-    }
+    let padding = prefixBitCount > 0 ? prefixBitCount & 7 : (8 - bitOffset) & 7
+    dropBits(padding)
   }
 
   mutating func readBlockHeader() throws(BitReaderError) -> BlockHeader {
@@ -160,33 +154,43 @@ struct BitReader: ~Copyable, ~Escapable {
     fileprivate let byteOffset: Int
     fileprivate let bitOffset: Int
     fileprivate let bufferedBits: BufferedBits
+    fileprivate let prefixBitCount: Int
+    fileprivate let nextByteOffset: Int
   }
 
   func checkpoint() -> Checkpoint {
-    Checkpoint(byteOffset: byteOffset, bitOffset: bitOffset, bufferedBits: bufferedBits)
+    Checkpoint(
+      byteOffset: byteOffset, bitOffset: bitOffset, bufferedBits: bufferedBits,
+      prefixBitCount: prefixBitCount, nextByteOffset: nextByteOffset)
   }
 
   mutating func restore(_ checkpoint: Checkpoint) {
     byteOffset = checkpoint.byteOffset
     bitOffset = checkpoint.bitOffset
     bufferedBits = checkpoint.bufferedBits
+    prefixBitCount = checkpoint.prefixBitCount
+    nextByteOffset = checkpoint.nextByteOffset
   }
 
   /// Retains partial fields between chunks without borrowing the previous input.
   /// A suspended field is at most 48 bits, so its unread tail fits in one word.
   mutating func remainder(includingUnreadBytes: Bool) -> (bits: BufferedBits, consumed: Int) {
-    if bitOffset > 0 {
-      appendBuffered(UInt64(input[byteOffset] >> bitOffset), count: 8 - bitOffset)
-      byteOffset += 1
-      bitOffset = 0
-    }
     if includingUnreadBytes {
-      while byteOffset < input.byteCount {
-        appendBuffered(UInt64(input[byteOffset]), count: 8)
-        byteOffset += 1
+      while nextByteOffset < input.byteCount {
+        appendBuffered(UInt64(input[nextByteOffset]), count: 8)
+        nextByteOffset += 1
       }
+      return (bufferedBits, input.byteCount)
     }
-    return (bufferedBits, byteOffset)
+    // Read-ahead must not consume container trailers or bytes the caller will
+    // supply again after needsOutput. Retain only the previous chunk's prefix
+    // and the unread tail of a byte whose leading bits have been consumed.
+    let tailBits = bitOffset == 0 ? 0 : 8 - bitOffset
+    let count = prefixBitCount + tailBits
+    let mask = UInt64.max >> (64 - count)
+    return (
+      BufferedBits(value: bufferedBits.value & mask, count: count), byteOffset + (tailBits == 0 ? 0 : 1)
+    )
   }
 
   private mutating func appendBuffered(_ value: UInt64, count: Int) {

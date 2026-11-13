@@ -56,6 +56,12 @@ struct RawInflater: ~Copyable, ~Sendable {
       throw .invalidState
     }
     let initialOutputCount = output.count
+    defer {
+      // Matches can read directly from this call's output. Only the last
+      // windowful needs to survive for the next input or output chunk.
+      let retained = min(output.count - initialOutputCount, history.capacity)
+      history.append(contentsOf: output.span.extracting(last: retained))
+    }
     var reader = BitReader(input.bytes, bufferedBits: bufferedBits)
     do throws(InflateError) {
       while true {
@@ -92,18 +98,18 @@ struct RawInflater: ~Copyable, ~Sendable {
             distanceDecoder = tables.distance
             phase = .compressed
           case .compressed:
-            try readToken(from: &reader)
+            let recentCount = min(output.count - initialOutputCount, history.capacity)
+            try readToken(from: &reader, availableHistory: min(history.capacity, history.count + recentCount))
           case .literal:
             guard output.count < output.capacity else {
               return progress(from: &reader, produced: output.count - initialOutputCount, status: .needsOutput)
             }
             output.append(literal)
-            history.appendLiteral(literal)
             totalOutputCount += 1
             phase = .compressed
           case .match:
             do throws(HistoryWindowError) {
-              let produced = try match.emit(into: &output, history: &history)
+              let produced = try match.emit(into: &output, history: history, outputStart: initialOutputCount)
               totalOutputCount += produced
             } catch {
               throw InflateError.invalidDistance
@@ -131,7 +137,7 @@ struct RawInflater: ~Copyable, ~Sendable {
     }
   }
 
-  private mutating func readToken(from reader: inout BitReader) throws(InflateError) {
+  private mutating func readToken(from reader: inout BitReader, availableHistory: Int) throws(InflateError) {
     let checkpoint = reader.checkpoint()
     do throws(InflateError) {
       let symbol =
@@ -156,7 +162,7 @@ struct RawInflater: ~Copyable, ~Sendable {
           let distanceSymbol = try distanceDecoder!.readSymbol(from: &reader)
           distance = Int(try reader.readMatchDistance(symbol: distanceSymbol))
         }
-        guard distance > 0 && distance <= history.count && distance <= maximumDistance else {
+        guard distance > 0 && distance <= availableHistory && distance <= maximumDistance else {
           throw InflateError.invalidDistance
         }
         try requireOutputSpace(length)
@@ -182,7 +188,7 @@ struct RawInflater: ~Copyable, ~Sendable {
   ) throws(InflateError) {
     let initialCount = output.count
     defer { totalOutputCount += output.count - initialCount }
-    try storedBlock.emit(from: &reader, into: &output, history: &history)
+    try storedBlock.emit(from: &reader, into: &output)
   }
 
   private mutating func finishBlock() {

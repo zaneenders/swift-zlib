@@ -47,18 +47,34 @@ struct HistoryWindow: ~Copyable, ~Sendable {
   mutating func copyMatch(
     distance: Int, length: Int, into output: inout OutputSpan<UInt8>
   ) throws(HistoryWindowError) -> Int {
+    let start = output.count
+    let produced = try copyMatch(distance: distance, length: length, into: &output, outputStart: start)
+    append(contentsOf: output.span.extracting(start...))
+    return produced
+  }
+
+  /// Reads from this window and bytes produced since `outputStart`, without
+  /// updating the window. The caller records output before returning a chunk.
+  borrowing func copyMatch(
+    distance: Int, length: Int, into output: inout OutputSpan<UInt8>, outputStart: Int
+  ) throws(HistoryWindowError) -> Int {
+    precondition(outputStart >= 0 && outputStart <= output.count)
     guard length >= 0 else { throw .invalidLength }
-    guard distance > 0 && distance <= count else { throw .invalidDistance }
+    let recentCount = output.count - outputStart
+    let available = min(capacity, count + min(recentCount, capacity))
+    guard distance > 0 && distance <= available else { throw .invalidDistance }
     let produced = min(length, output.freeCapacity)
     guard produced > 0 else { return 0 }
-    let start = output.count
     if distance == 1 {
-      let byte = try byte(distance: 1)
+      let byte = recentCount > 0 ? output[output.count - 1] : try byte(distance: 1)
       output.append(repeating: byte, count: produced)
+    } else if distance <= recentCount {
+      output.repeatBytes(distance: distance, count: produced)
     } else {
-      var offset = writeIndex - distance
+      let historyDistance = distance - recentCount
+      var offset = writeIndex - historyDistance
       if offset < 0 { offset += capacity }
-      let prefix = min(distance, produced)
+      let prefix = min(historyDistance, produced)
       let first = min(prefix, capacity - offset)
       output.appendBytes(storage.span.extracting(offset..<(offset + first)))
       output.appendBytes(storage.span.extracting(0..<(prefix - first)))
@@ -66,7 +82,6 @@ struct HistoryWindow: ~Copyable, ~Sendable {
         output.repeatBytes(distance: distance, count: produced - prefix)
       }
     }
-    append(contentsOf: output.span.extracting(start...))
     return produced
   }
 

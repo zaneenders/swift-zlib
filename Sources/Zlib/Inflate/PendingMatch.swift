@@ -21,4 +21,14 @@ struct PendingMatch: ~Copyable, ~Sendable {
     remaining -= count
     return count
   }
+
+  /// Uses output from this call before falling back to the saved history.
+  @discardableResult
+  mutating func emit(
+    into output: inout OutputSpan<UInt8>, history: borrowing HistoryWindow, outputStart: Int
+  ) throws(HistoryWindowError) -> Int {
+    let count = try history.copyMatch(distance: distance, length: remaining, into: &output, outputStart: outputStart)
+    remaining -= count
+    return count
+  }
 }
