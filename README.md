@@ -19,5 +19,9 @@ let decoded = try ZLib.inflate(
 
 ```sh
 swift test
-swift run -c release ZlibBenchmarks
+swift run --package-path Benchmarks -c release ZlibBenchmarks --update-readme
 ```
+
+[Benchmarks against C zlib and methodology](Benchmarks/README.md).
+
+⚠️ slower than C
