@@ -31,18 +31,18 @@ Comparison columns name the faster implementation and its speedup.
 
 | File | Swift encode | C encode | Faster encoder | Swift decode | C decode | Faster decoder |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| dickens | 35.50 | 33.77 | Swift 1.05× faster | 90.66 | 1157.64 | C 12.77× faster |
-| mozilla | 66.88 | 45.58 | Swift 1.47× faster | 94.19 | 1034.58 | C 10.98× faster |
-| mr | 51.58 | 36.68 | Swift 1.41× faster | 102.27 | 1134.12 | C 11.09× faster |
-| nci | 133.98 | 146.11 | C 1.09× faster | 365.73 | 3636.36 | C 9.94× faster |
-| ooffice | 46.85 | 36.08 | Swift 1.30× faster | 66.75 | 733.16 | C 10.98× faster |
-| osdb | 87.29 | 69.29 | Swift 1.26× faster | 103.61 | 1260.55 | C 12.17× faster |
-| reymont | 37.94 | 32.73 | Swift 1.16× faster | 118.46 | 1495.75 | C 12.63× faster |
-| samba | 80.97 | 78.21 | Swift 1.04× faster | 140.36 | 1602.06 | C 11.41× faster |
-| sao | 42.93 | 33.83 | Swift 1.27× faster | 50.86 | 685.90 | C 13.48× faster |
-| webster | 52.74 | 53.27 | C 1.01× faster | 112.39 | 1323.85 | C 11.78× faster |
-| xml | 107.56 | 112.70 | C 1.05× faster | 261.01 | 2851.14 | C 10.92× faster |
-| x-ray | 47.49 | 44.80 | Swift 1.06× faster | 54.25 | 593.43 | C 10.94× faster |
+| dickens | 35.15 | 33.25 | Swift 1.06× faster | 214.71 | 1154.62 | C 5.38× faster |
+| mozilla | 66.53 | 45.15 | Swift 1.47× faster | 259.03 | 1024.89 | C 3.96× faster |
+| mr | 50.99 | 36.31 | Swift 1.40× faster | 254.58 | 1126.78 | C 4.43× faster |
+| nci | 133.49 | 144.99 | C 1.09× faster | 874.01 | 3648.85 | C 4.17× faster |
+| ooffice | 46.56 | 35.82 | Swift 1.30× faster | 178.84 | 730.79 | C 4.09× faster |
+| osdb | 87.80 | 69.20 | Swift 1.27× faster | 294.43 | 1259.53 | C 4.28× faster |
+| reymont | 37.78 | 32.46 | Swift 1.16× faster | 286.04 | 1488.91 | C 5.21× faster |
+| samba | 80.60 | 77.95 | Swift 1.03× faster | 373.51 | 1598.68 | C 4.28× faster |
+| sao | 43.01 | 33.73 | Swift 1.27× faster | 172.46 | 685.69 | C 3.98× faster |
+| webster | 52.58 | 53.24 | C 1.01× faster | 268.03 | 1322.85 | C 4.94× faster |
+| xml | 107.08 | 112.46 | C 1.05× faster | 632.07 | 2858.72 | C 4.52× faster |
+| x-ray | 47.98 | 44.96 | Swift 1.07× faster | 143.63 | 594.36 | C 4.14× faster |
 
 Release build; median of 3 samples.
 Calls per sample scale down from 1000 per 64 KiB, with a minimum of one call per file.
@@ -50,8 +50,8 @@ Codec setup, allocations, and teardown are timed. Downloading, file I/O, SHA-256
 and correctness checks are outside the timed regions. Swift and C alternate which runs first.
 
 Apple M5 · macOS 27.0.1 · Swift 6.4.2.
-Library: [`ad3d04e`](https://github.com/zaneenders/swift-zlib/commit/ad3d04ec7b80c19beb959fa7cfbcaf2ee72efe0a).
-Measured 2026-11-13T04:30:11Z.
+Library: [`0db4431`](https://github.com/zaneenders/swift-zlib/commit/0db44313eacc8150c23296e27dadc183cf5dcef5).
+Measured 2026-11-13T05:16:04Z.
 
 Regenerate from the repository root (first run downloads about 65 MiB and caches the corpus in `Benchmarks/.build/silesia`):
 
