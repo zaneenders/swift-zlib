@@ -1,5 +1,8 @@
-import CryptoKit
 import Foundation
+
+#if canImport(CryptoKit)
+import CryptoKit
+#endif
 
 struct BenchmarkPayload {
   let name: String
@@ -50,7 +53,7 @@ struct BenchmarkPayload {
   func input(from directory: URL) throws -> [UInt8] {
     let file = directory.appendingPathComponent(name)
     let data = try Data(contentsOf: file, options: .mappedIfSafe)
-    guard data.count == byteCount, Self.digest(data) == sha256 else {
+    guard data.count == byteCount, try Self.digest(data) == sha256 else {
       throw CorpusError(
         "Silesia size or SHA-256 mismatch: \(file.path). Expected the original, uncompressed corpus file.")
     }
@@ -78,19 +81,45 @@ struct BenchmarkPayload {
           "--silent", "--show-error", "--output", temporary.path,
           "https://sun.aei.polsl.pl/~sdeor/corpus/silesia.zip"
         ])
-      guard digest(try Data(contentsOf: temporary, options: .mappedIfSafe)) == archiveDigest else {
+      guard try digest(Data(contentsOf: temporary, options: .mappedIfSafe)) == archiveDigest else {
         throw CorpusError("Downloaded Silesia archive failed SHA-256 verification.")
       }
       try manager.moveItem(at: temporary, to: archive)
-    } else if digest(try Data(contentsOf: archive, options: .mappedIfSafe)) != archiveDigest {
+    } else if try digest(Data(contentsOf: archive, options: .mappedIfSafe)) != archiveDigest {
       throw CorpusError("Silesia archive checksum mismatch. Remove \(archive.path) and rerun.")
     }
     // Extract only missing, known filenames; preserve any existing local files.
     try run("/usr/bin/unzip", ["-q", archive.path] + missing.map(\.name) + ["-d", directory.path])
   }
 
-  private static func digest(_ data: Data) -> String {
-    SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+  private static func digest(_ data: Data) throws -> String {
+    #if canImport(CryptoKit)
+    return SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+    #else
+    // Linux toolchains do not ship CryptoKit. Hash the same in-memory bytes
+    // through coreutils, outside timing, without adding a library dependency.
+    let process = Process()
+    let input = Pipe()
+    let output = Pipe()
+    process.executableURL = URL(fileURLWithPath: "/usr/bin/sha256sum")
+    process.standardInput = input
+    process.standardOutput = output
+    try process.run()
+    do {
+      try input.fileHandleForWriting.write(contentsOf: data)
+      try input.fileHandleForWriting.close()
+    } catch {
+      process.terminate()
+      process.waitUntilExit()
+      throw error
+    }
+    let hash = output.fileHandleForReading.readDataToEndOfFile()
+    process.waitUntilExit()
+    guard process.terminationStatus == 0, hash.count >= 64 else {
+      throw CorpusError("sha256sum could not verify the corpus.")
+    }
+    return String(decoding: hash.prefix(64), as: UTF8.self)
+    #endif
   }
 
   private static func run(_ executable: String, _ arguments: [String]) throws {

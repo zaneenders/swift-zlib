@@ -38,6 +38,8 @@ public struct Deflater: ~Copyable, ~Sendable {
 
   public let format: ZLib.Format
   public let strategy: ZLib.Strategy
+  /// The match-search effort retained across stream resets.
+  public let effort: ZLib.Effort
   /// Input bytes accepted so far, including buffered input.
   public private(set) var totalInputCount = 0
   /// Compressed bytes emitted, excluding preexisting bytes in output spans.
@@ -66,20 +68,24 @@ public struct Deflater: ~Copyable, ~Sendable {
 
   /// Creates a compressor. Gzip uses a reproducible header without metadata.
   /// The default `.automatic` strategy compares encoded bit costs per block.
-  public init(format: ZLib.Format = .rawDeflate, strategy: ZLib.Strategy = .automatic) {
+  /// `effort` controls match searching and does not change the storage budget.
+  public init(
+    format: ZLib.Format = .rawDeflate, strategy: ZLib.Strategy = .automatic, effort: ZLib.Effort = .balanced
+  ) {
     self.format = format
     self.strategy = strategy
+    self.effort = effort
     switch strategy {
     case .stored: break
-    case .fixed: finder = LZ77MatchFinder()
+    case .fixed: finder = LZ77MatchFinder(effort: effort)
     case .automatic, .dynamic:
-      finder = LZ77MatchFinder()
+      finder = LZ77MatchFinder(effort: effort)
       workspace = DeflateWorkspace(maximumTokens: Self.blockSize)
     }
     writeHeader()
   }
 
-  /// Starts a new independent stream with the same format and strategy.
+  /// Starts a new independent stream with the same format, strategy, and effort.
   ///
   /// May be called at any time, including after completion or an error. Discards
   /// buffered input, match history, pending output, and any outstanding flush

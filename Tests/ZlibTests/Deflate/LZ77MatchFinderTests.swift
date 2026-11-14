@@ -2,6 +2,38 @@ import Testing
 
 @testable import Zlib
 
+@Test(arguments: [
+  (8, ZLib.Effort.fast, 3), (8, .balanced, 256), (8, .thorough, 256),
+  (128, .fast, 3), (128, .balanced, 3), (128, .thorough, 256)
+])
+func matchFinderEffortBoundsItsCandidateSearch(recent: Int, effort: ZLib.Effort, length: Int) {
+  let fixture = effortCollisionInput(recentCandidates: recent)
+  var finder = LZ77MatchFinder(effort: effort)
+  for _ in 0..<2 {
+    finder.reset()
+    finder.seed(input: fixture.bytes.span, end: fixture.start)
+    var position = fixture.start
+    let expectedDistance = length == 3 ? 9 : fixture.start
+    #expect(
+      finder.next(input: fixture.bytes.span, position: &position, end: fixture.bytes.count)
+        == .match(length: length, distance: expectedDistance))
+    #expect(position == fixture.start + length)
+  }
+}
+
+@Test(arguments: ZLib.Effort.allCases)
+func matchFinderFastEffortCanStopBeforeAnOlderLongerMatch(effort: ZLib.Effort) {
+  let best = [UInt8(65), 66, 67] + [UInt8](repeating: 90, count: 197)
+  var recent = best
+  recent[40] = 0
+  let input = best + recent + best
+  var finder = LZ77MatchFinder(effort: effort)
+  finder.seed(input: input.span, end: 400)
+  var position = 400
+  let expected: DeflateToken = effort == .fast ? .match(length: 40, distance: 200) : .match(length: 200, distance: 400)
+  #expect(finder.next(input: input.span, position: &position, end: input.count) == expected)
+}
+
 @Test func matchFinderEmitsOverlappingMaximumLengthMatches() {
   let input = [UInt8](repeating: 90, count: 600)
   var finder = LZ77MatchFinder()

@@ -6,15 +6,17 @@ import Zlib
 private func expectIndependentStreamAfterReset(_ deflater: inout Deflater, input: [UInt8]) throws {
   let format = deflater.format
   let strategy = deflater.strategy
+  let effort = deflater.effort
   deflater.reset()
   #expect(deflater.format == format)
   #expect(deflater.strategy == strategy)
+  #expect(deflater.effort == effort)
   #expect(deflater.isFinished == false)
   #expect(deflater.totalInputCount == 0)
   #expect(deflater.totalOutputCount == 0)
 
   let encoded = try driveDeflater(&deflater, input: input, flush: .finish, outputChunkSize: 17)
-  var fresh = Deflater(format: format, strategy: strategy)
+  var fresh = Deflater(format: format, strategy: strategy, effort: effort)
   let expected = try driveDeflater(&fresh, input: input, flush: .finish, outputChunkSize: 4_096)
   #expect(encoded == expected)
   #expect(deflater.isFinished == true)

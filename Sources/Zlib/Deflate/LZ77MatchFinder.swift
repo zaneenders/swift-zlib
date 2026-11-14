@@ -9,7 +9,16 @@ enum DeflateToken: Equatable, Sendable {
 struct LZ77MatchFinder: ~Copyable {
   private var heads = RigidArray<Int>(repeating: -1, count: 65_536)
   private var previous = RigidArray<Int>(repeating: -1, count: 32_768)
-  private static let maximumCandidates = 128
+  private let maximumCandidates: Int
+  private let niceLength: Int
+
+  init(effort: ZLib.Effort = .balanced) {
+    switch effort {
+    case .fast: (maximumCandidates, niceLength) = (8, 32)
+    case .balanced: (maximumCandidates, niceLength) = (128, 258)
+    case .thorough: (maximumCandidates, niceLength) = (1_024, 258)
+    }
+  }
 
   /// Reuses the hash chains for a rebased block without retaining old positions.
   mutating func reset() {
@@ -37,10 +46,11 @@ struct LZ77MatchFinder: ~Copyable {
     var bestDistance = 0
     let maximumLength = min(258, end - position)
     if maximumLength >= 3 {
+      let targetLength = min(niceLength, maximumLength)
       var candidate = heads[hash(input, at: position)]
       let oldest = max(0, position - 32_768)
       var searched = 0
-      while candidate >= oldest && searched < Self.maximumCandidates {
+      while candidate >= oldest && searched < maximumCandidates {
         if input[candidate + bestLength] == input[position + bestLength] {
           var length = 0
           while maximumLength - length >= 8 {
@@ -59,7 +69,7 @@ struct LZ77MatchFinder: ~Copyable {
           if length > bestLength {
             bestLength = length
             bestDistance = position - candidate
-            if length == maximumLength { break }
+            if length >= targetLength { break }
           }
         }
         candidate = previous[candidate & 32_767]

@@ -1,6 +1,20 @@
 import Zlib
 import zlib
 
+enum BenchmarkEffort: String, CaseIterable {
+  case fast
+  case balanced
+  case thorough
+
+  var swift: ZLib.Effort {
+    switch self {
+    case .fast: .fast
+    case .balanced: .balanced
+    case .thorough: .thorough
+    }
+  }
+}
+
 enum BenchmarkStrategy: String, CaseIterable {
   case automatic
   case stored

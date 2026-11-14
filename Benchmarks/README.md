@@ -3,6 +3,9 @@
 All 12 original files from the [Silesia compression corpus](https://sun.aei.polsl.pl/~sdeor/index.php?page=silesia),
 totaling 211,938,580 bytes. Each file is a separate raw DEFLATE stream, without repetition or padding.
 System C zlib 1.2.12.
+The recorded Swift search behavior is now named `.balanced`. The current CLI
+supports `--effort fast|balanced|thorough|all`; effort and block strategy are
+independent, and changing Swift effort does not change the C baseline's level.
 Both encoders receive identical input; decoded output is verified byte-for-byte against it.
 Both decoders read the same C-generated DEFLATE bytes. Compressed encoder output may differ.
 
@@ -61,5 +64,26 @@ swift run --package-path Benchmarks -c release ZlibBenchmarks --update-readme
 
 Use `--corpus /path/to/silesia` for an existing uncompressed corpus; the same size and SHA-256 checks apply.
 The default strategy is `automatic`; `--strategy all` also measures `stored`, `fixed`, and `dynamic`.
+Use `--effort all` to compare all Swift search settings, or select one with
+`--effort fast`, `--effort balanced`, or `--effort thorough`. CSV includes an
+`effort` column; Markdown groups results by strategy and effort. Reports include
+the actual OS and CPU. Corpus validation uses the system `sha256sum` command
+when CryptoKit is unavailable.
 Omit `--update-readme` for CSV including exact compressed sizes, throughput, and comparison ratios.
 For a quick correctness and timing pass, use `--iterations 1 --samples 1`.
+
+On Linux, expose the system zlib headers through a Clang module map:
+
+```sh
+mkdir -p Benchmarks/.build/zlib-module
+cat > Benchmarks/.build/zlib-module/module.modulemap <<'MAP'
+module zlib [system] {
+  header "/usr/include/zlib.h"
+  link "z"
+  export *
+}
+MAP
+swift run --package-path Benchmarks -c release \
+  -Xcc -fmodule-map-file="$PWD/Benchmarks/.build/zlib-module/module.modulemap" \
+  ZlibBenchmarks --effort all --iterations 1 --samples 3
+```

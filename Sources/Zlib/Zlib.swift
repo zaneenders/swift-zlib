@@ -64,28 +64,45 @@ public enum ZLib: ~Sendable {
     case dynamic
   }
 
+  /// How much work to spend searching for LZ77 matches, independently of block strategy.
+  ///
+  /// Higher effort searches more candidates but does not guarantee smaller output.
+  /// These settings do not correspond to C zlib's numeric compression levels.
+  /// Stored blocks ignore effort. All settings use the same working storage.
+  public enum Effort: CaseIterable, Equatable, Sendable {
+    /// Searches up to 8 candidates and stops after finding a match of at least 32 bytes.
+    case fast
+    /// Searches up to 128 candidates, stopping at the maximum possible match length.
+    /// This is the default and preserves the original encoder's search behavior.
+    case balanced
+    /// Searches up to 1,024 candidates, stopping at the maximum possible match length.
+    case thorough
+  }
+
   /// Compresses using the requested format and block strategy.
   ///
   /// Gzip output contains one member with no timestamp, filename, or comment.
   /// The default `.automatic` strategy compares encoded bit costs per block.
   /// Explicit strategies preserve their existing block layouts.
+  /// `effort` controls match searching; `.balanced` preserves the default output.
   /// Use `Deflater` for bounded-memory compression, chunks, and sync flushes.
   public static func deflate(
-    input: borrowing Span<UInt8>, format: Format = .rawDeflate, strategy: Strategy = .automatic
+    input: borrowing Span<UInt8>, format: Format = .rawDeflate, strategy: Strategy = .automatic,
+    effort: Effort = .balanced
   ) throws(BitWriterError) -> UniqueArray<UInt8> {
     switch format {
     case .gzip:
-      return try GzipEncoder.encode(input: input, strategy: strategy)
+      return try GzipEncoder.encode(input: input, strategy: strategy, effort: effort)
     case .zlib:
-      return try ZlibEncoder.encode(input: input, strategy: strategy)
+      return try ZlibEncoder.encode(input: input, strategy: strategy, effort: effort)
     case .rawDeflate:
       break
     }
     switch strategy {
-    case .automatic: return try DeflateEncoder.automatic(input: input)
+    case .automatic: return try DeflateEncoder.automatic(input: input, effort: effort)
     case .stored: return try DeflateEncoder.stored(input: input)
-    case .fixed: return try DeflateEncoder.fixed(input: input)
-    case .dynamic: return try DeflateEncoder.dynamic(input: input)
+    case .fixed: return try DeflateEncoder.fixed(input: input, effort: effort)
+    case .dynamic: return try DeflateEncoder.dynamic(input: input, effort: effort)
     }
   }
 }

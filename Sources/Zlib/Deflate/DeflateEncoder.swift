@@ -1,9 +1,11 @@
 import struct BasicContainers.RigidArray
 
 enum DeflateEncoder: ~Sendable {
-  static func automatic(input: borrowing Span<UInt8>) throws(BitWriterError) -> UniqueArray<UInt8> {
+  static func automatic(
+    input: borrowing Span<UInt8>, effort: ZLib.Effort = .balanced
+  ) throws(BitWriterError) -> UniqueArray<UInt8> {
     var writer = BitWriter(minimumCapacity: min(input.count, 65_536))
-    var finder = LZ77MatchFinder()
+    var finder = LZ77MatchFinder(effort: effort)
     var workspace = DeflateWorkspace(maximumTokens: min(input.count, 65_535))
     var position = 0
     repeat {
@@ -27,18 +29,22 @@ enum DeflateEncoder: ~Sendable {
     return writer.finish()
   }
 
-  static func fixed(input: borrowing Span<UInt8>) throws(BitWriterError) -> UniqueArray<UInt8> {
+  static func fixed(
+    input: borrowing Span<UInt8>, effort: ZLib.Effort = .balanced
+  ) throws(BitWriterError) -> UniqueArray<UInt8> {
     var writer = BitWriter(minimumCapacity: min(input.count, 65_536))
-    var finder = LZ77MatchFinder()
+    var finder = LZ77MatchFinder(effort: effort)
     var position = 0
     try writeFixedBlock(
       input: input, position: &position, end: input.count, isFinal: true, finder: &finder, writer: &writer)
     return writer.finish()
   }
 
-  static func dynamic(input: borrowing Span<UInt8>) throws(BitWriterError) -> UniqueArray<UInt8> {
+  static func dynamic(
+    input: borrowing Span<UInt8>, effort: ZLib.Effort = .balanced
+  ) throws(BitWriterError) -> UniqueArray<UInt8> {
     var writer = BitWriter(minimumCapacity: min(input.count, 65_536))
-    var finder = LZ77MatchFinder()
+    var finder = LZ77MatchFinder(effort: effort)
     var workspace = DeflateWorkspace(maximumTokens: min(input.count, 65_535))
     var position = 0
     repeat {

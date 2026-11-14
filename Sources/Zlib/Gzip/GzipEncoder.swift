@@ -1,8 +1,8 @@
 enum GzipEncoder: ~Sendable {
   static func encode(
-    input: borrowing Span<UInt8>, strategy: ZLib.Strategy
+    input: borrowing Span<UInt8>, strategy: ZLib.Strategy, effort: ZLib.Effort
   ) throws(BitWriterError) -> UniqueArray<UInt8> {
-    let compressed = try ZLib.deflate(input: input, strategy: strategy)
+    let compressed = try ZLib.deflate(input: input, strategy: strategy, effort: effort)
     let (capacity, overflow) = compressed.count.addingReportingOverflow(18)
     guard !overflow else { throw .inputToLong }
     var output = UniqueArray<UInt8>(minimumCapacity: capacity)

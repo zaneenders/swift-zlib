@@ -14,6 +14,7 @@ struct BenchmarkOptions {
   var corpusDirectory = benchmarkDirectory.appendingPathComponent(".build/silesia")
   var downloadCorpus = true
   var strategies: [BenchmarkStrategy] = [.automatic]
+  var efforts: [BenchmarkEffort] = [.balanced]
 
   func iterations(for inputBytes: Int) -> Int {
     max(1, iterations / max(1, inputBytes / 65_536))
@@ -27,6 +28,7 @@ struct BenchmarkOptions {
       --iterations sets calls per 64 KiB sample (default 1,000), scaled down for larger inputs (minimum 1).
       --samples COUNT sets the number of samples (default 3).
       --strategy automatic|stored|fixed|dynamic|all selects strategies (default automatic).
+      --effort fast|balanced|thorough|all selects Swift search effort (default balanced; C levels are unchanged).
       --corpus PATH uses existing, uncompressed Silesia files instead of downloading to the cache.
       --markdown prints a Markdown report; --update-readme writes it to Benchmarks/README.md.
       """
@@ -54,6 +56,13 @@ struct BenchmarkOptions {
           arguments[index + 1] == "all"
           ? BenchmarkStrategy.allCases : [BenchmarkStrategy(rawValue: arguments[index + 1])!]
         index += 2
+      } else if argument == "--effort", index + 1 < arguments.count,
+        arguments[index + 1] == "all" || BenchmarkEffort(rawValue: arguments[index + 1]) != nil
+      {
+        efforts =
+          arguments[index + 1] == "all"
+          ? BenchmarkEffort.allCases : [BenchmarkEffort(rawValue: arguments[index + 1])!]
+        index += 2
       } else if argument == "--iterations" || argument == "--samples",
         index + 1 < arguments.count, let count = Int(arguments[index + 1]), count > 0
       {
@@ -74,6 +83,7 @@ struct BenchmarkOptions {
 struct BenchmarkResult {
   let payload: String
   let strategy: String
+  let effort: String
   let inputBytes: Int
   let iterations: Int
   let cLevel: Int32
@@ -86,10 +96,10 @@ struct BenchmarkResult {
   let cDecode: Double
 
   static let csvHeader =
-    "payload,strategy,c_level,c_strategy,input_bytes,iterations,swift_compressed_bytes,c_compressed_bytes,swift_encode_mib_s,c_encode_mib_s,encode_swift_over_c,swift_decode_mib_s,c_decode_mib_s,decode_swift_over_c"
+    "payload,strategy,effort,c_level,c_strategy,input_bytes,iterations,swift_compressed_bytes,c_compressed_bytes,swift_encode_mib_s,c_encode_mib_s,encode_swift_over_c,swift_decode_mib_s,c_decode_mib_s,decode_swift_over_c"
 
   var csv: String {
-    "\(payload),\(strategy),\(cLevel),\(cStrategy),\(inputBytes),\(iterations),"
+    "\(payload),\(strategy),\(effort),\(cLevel),\(cStrategy),\(inputBytes),\(iterations),"
       + "\(swiftCompressedBytes),\(cCompressedBytes),"
       + String(
         format: "%.2f,%.2f,%.3f,%.2f,%.2f,%.3f",
@@ -146,13 +156,23 @@ func markdownReport(_ results: [BenchmarkResult], options: BenchmarkOptions) -> 
       "status", "--porcelain", "--", "Sources"
     ])
   let sourceState = sourceChanges.isEmpty ? "" : " (modified sources)"
+  #if os(Linux)
+  let cpuInfo = (try? String(contentsOfFile: "/proc/cpuinfo", encoding: .utf8)) ?? ""
+  let cpuLine = cpuInfo.split(separator: "\n").first { $0.hasPrefix("model name") }
+  let cpu = cpuLine?.split(separator: ":", maxSplits: 1).last?.trimmingCharacters(in: .whitespaces) ?? "unavailable"
+  let platform = "\(cpu) · \(command("/usr/bin/uname", ["-sr"]))"
+  #else
   let cpu = command("/usr/sbin/sysctl", ["-n", "machdep.cpu.brand_string"])
-  let os = command("/usr/bin/sw_vers", ["-productVersion"])
+  let platform = "\(cpu) · macOS \(command("/usr/bin/sw_vers", ["-productVersion"]))"
+  #endif
   let toolchain = command("/usr/bin/env", ["swift", "--version"]).split(separator: "\n").first ?? "unavailable"
   let swiftVersion = toolchain.split(separator: " ").drop(while: { $0 != "version" }).dropFirst().first ?? "unavailable"
   var regenerate = "swift run --package-path Benchmarks -c release ZlibBenchmarks"
   if options.strategies != [.automatic] {
     regenerate += " --strategy \(options.strategies.count == 1 ? options.strategies[0].rawValue : "all")"
+  }
+  if options.efforts != [.balanced] {
+    regenerate += " --effort \(options.efforts.count == 1 ? options.efforts[0].rawValue : "all")"
   }
   if options.iterations != 1_000 { regenerate += " --iterations \(options.iterations)" }
   if options.samples != 3 { regenerate += " --samples \(options.samples)" }
@@ -169,40 +189,42 @@ func markdownReport(_ results: [BenchmarkResult], options: BenchmarkOptions) -> 
     """
   ]
   for strategy in options.strategies {
-    let group = results.filter { $0.strategy == strategy.rawValue }
-    sections.append(
-      """
-
-      ## Swift `.\(strategy.rawValue)` vs C level \(strategy.cLevel), \(strategy.cStrategyName)
-
-      Compressed sizes are bytes, with percentage of input in parentheses (smaller is better).
-
-      | File | Input bytes | Calls/sample | Swift compressed | C compressed |
-      | --- | ---: | ---: | ---: | ---: |
-      """)
-    for result in group {
+    for effort in options.efforts {
+      let group = results.filter { $0.strategy == strategy.rawValue && $0.effort == effort.rawValue }
       sections.append(
-        "| \(result.payload) | \(result.inputBytes) | \(result.iterations) | \(result.markdownSizes) |")
-    }
-    let totals = group.reduce(into: (input: 0, swift: 0, c: 0)) { totals, result in
-      totals.input += result.inputBytes
-      totals.swift += result.swiftCompressedBytes
-      totals.c += result.cCompressedBytes
-    }
-    let swiftSize = BenchmarkResult.compressedSize(totals.swift, inputBytes: totals.input)
-    let cSize = BenchmarkResult.compressedSize(totals.c, inputBytes: totals.input)
-    sections.append("| **Total** | **\(totals.input)** | — | **\(swiftSize)** | **\(cSize)** |")
-    sections.append(
-      """
+        """
 
-      Throughput is MiB/s of uncompressed input (higher is better).
-      Comparison columns name the faster implementation and its speedup.
+        ## Swift `.\(strategy.rawValue)`, `.\(effort.rawValue)` effort vs C level \(strategy.cLevel), \(strategy.cStrategyName)
 
-      | File | Swift encode | C encode | Faster encoder | Swift decode | C decode | Faster decoder |
-      | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-      """)
-    for result in group {
-      sections.append("| \(result.payload) | \(result.markdownMetrics) |")
+        Compressed sizes are bytes, with percentage of input in parentheses (smaller is better).
+
+        | File | Input bytes | Calls/sample | Swift compressed | C compressed |
+        | --- | ---: | ---: | ---: | ---: |
+        """)
+      for result in group {
+        sections.append(
+          "| \(result.payload) | \(result.inputBytes) | \(result.iterations) | \(result.markdownSizes) |")
+      }
+      let totals = group.reduce(into: (input: 0, swift: 0, c: 0)) { totals, result in
+        totals.input += result.inputBytes
+        totals.swift += result.swiftCompressedBytes
+        totals.c += result.cCompressedBytes
+      }
+      let swiftSize = BenchmarkResult.compressedSize(totals.swift, inputBytes: totals.input)
+      let cSize = BenchmarkResult.compressedSize(totals.c, inputBytes: totals.input)
+      sections.append("| **Total** | **\(totals.input)** | — | **\(swiftSize)** | **\(cSize)** |")
+      sections.append(
+        """
+
+        Throughput is MiB/s of uncompressed input (higher is better).
+        Comparison columns name the faster implementation and its speedup.
+
+        | File | Swift encode | C encode | Faster encoder | Swift decode | C decode | Faster decoder |
+        | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+        """)
+      for result in group {
+        sections.append("| \(result.payload) | \(result.markdownMetrics) |")
+      }
     }
   }
   sections.append(
@@ -213,7 +235,7 @@ func markdownReport(_ results: [BenchmarkResult], options: BenchmarkOptions) -> 
     Codec setup, allocations, and teardown are timed. Downloading, file I/O, SHA-256 verification,
     and correctness checks are outside the timed regions. Swift and C alternate which runs first.
 
-    \(cpu) · macOS \(os) · Swift \(swiftVersion).
+    \(platform) · Swift \(swiftVersion).
     Library: [`\(revision.prefix(7))`](https://github.com/zaneenders/swift-zlib/commit/\(revision))\(sourceState).
     Measured \(ISO8601DateFormatter().string(from: Date())).
 
@@ -225,8 +247,26 @@ func markdownReport(_ results: [BenchmarkResult], options: BenchmarkOptions) -> 
 
     Use `--corpus /path/to/silesia` for an existing uncompressed corpus; the same size and SHA-256 checks apply.
     The default strategy is `automatic`; `--strategy all` also measures `stored`, `fixed`, and `dynamic`.
+    Swift effort defaults to `balanced`; `--effort all` measures all three search settings against the same C level.
     Omit `--update-readme` for CSV including exact compressed sizes, throughput, and comparison ratios.
     For a quick correctness and timing pass, use `--iterations 1 --samples 1`.
+
+    On Linux, expose the system zlib headers through a Clang module map.
+    Corpus validation uses the system `sha256sum` command when CryptoKit is unavailable.
+
+    ```sh
+    mkdir -p Benchmarks/.build/zlib-module
+    cat > Benchmarks/.build/zlib-module/module.modulemap <<'MAP'
+    module zlib [system] {
+      header "/usr/include/zlib.h"
+      link "z"
+      export *
+    }
+    MAP
+    swift run --package-path Benchmarks -c release \\
+      -Xcc -fmodule-map-file="$PWD/Benchmarks/.build/zlib-module/module.modulemap" \\
+      ZlibBenchmarks --effort all --iterations 1 --samples 3
+    ```
     """)
   return sections.joined(separator: "\n") + "\n"
 }

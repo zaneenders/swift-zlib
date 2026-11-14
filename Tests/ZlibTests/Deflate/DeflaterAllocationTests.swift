@@ -58,7 +58,8 @@ func streamingDeflaterReusesWorkingStorageWithoutAllocations(format: ZLib.Format
   let calibration = calibrate()
   let calibrationCalls = probe(0)
   try #require(calibration != 0 && calibrationCalls > 0)
-  let maximumInput = 640 * 360 * 3
+  // Cross several DEFLATE block boundaries without an application-specific size.
+  let maximumInput = 65_535 * 3 + 1
   var random: UInt32 = 1
   let noise = (0..<maximumInput).map { _ in
     random ^= random << 13
@@ -72,59 +73,61 @@ func streamingDeflaterReusesWorkingStorageWithoutAllocations(format: ZLib.Format
     InteropPayload.skewedFrequencies.bytes
   ]
   let empty: [UInt8] = []
-  var totalCalls: Int64 = 0
-  for input in payloads {
-    // Initialization is outside the measured scope. There is no warmup encode.
-    var deflater = Deflater(format: format, strategy: strategy)
-    var chunk = UniqueArray<UInt8>(capacity: 257)
-    var encoded = UniqueArray<UInt8>(capacity: maximumInput * 2 + 1_024)
-    let calls = try measuredAllocations(probe) { () throws(DeflateError) in
-      try driveWithoutAllocations(&deflater, input: input.span, flush: .finish, chunk: &chunk, encoded: &encoded)
-    }
-    #expect(calls == 0)
-    let bytes = (0..<encoded.count).map { encoded[$0] }
-    #expect(try cZlibInflate(bytes, expectedCount: input.count, windowBits: deflaterWindowBits(format)) == input)
+  for effort in ZLib.Effort.allCases {
+    var totalCalls: Int64 = 0
+    for input in payloads {
+      // Initialization is outside the measured scope. There is no warmup encode.
+      var deflater = Deflater(format: format, strategy: strategy, effort: effort)
+      var chunk = UniqueArray<UInt8>(capacity: 257)
+      var encoded = UniqueArray<UInt8>(capacity: maximumInput * 2 + 1_024)
+      let calls = try measuredAllocations(probe) { () throws(DeflateError) in
+        try driveWithoutAllocations(&deflater, input: input.span, flush: .finish, chunk: &chunk, encoded: &encoded)
+      }
+      #expect(calls == 0)
+      let bytes = (0..<encoded.count).map { encoded[$0] }
+      #expect(try cZlibInflate(bytes, expectedCount: input.count, windowBits: deflaterWindowBits(format)) == input)
 
-    let syncCalls = try measuredAllocations(probe) { () throws(DeflateError) in
-      deflater.reset()
-      encoded.removeAll()
-      try driveWithoutAllocations(&deflater, input: input.span, flush: .none, chunk: &chunk, encoded: &encoded)
-      try driveWithoutAllocations(&deflater, input: empty.span, flush: .sync, chunk: &chunk, encoded: &encoded)
-      try driveWithoutAllocations(&deflater, input: empty.span, flush: .finish, chunk: &chunk, encoded: &encoded)
-    }
-    #expect(syncCalls == 0)
-    let synced = (0..<encoded.count).map { encoded[$0] }
-    #expect(try cZlibInflate(synced, expectedCount: input.count, windowBits: deflaterWindowBits(format)) == input)
+      let syncCalls = try measuredAllocations(probe) { () throws(DeflateError) in
+        deflater.reset()
+        encoded.removeAll()
+        try driveWithoutAllocations(&deflater, input: input.span, flush: .none, chunk: &chunk, encoded: &encoded)
+        try driveWithoutAllocations(&deflater, input: empty.span, flush: .sync, chunk: &chunk, encoded: &encoded)
+        try driveWithoutAllocations(&deflater, input: empty.span, flush: .finish, chunk: &chunk, encoded: &encoded)
+      }
+      #expect(syncCalls == 0)
+      let synced = (0..<encoded.count).map { encoded[$0] }
+      #expect(try cZlibInflate(synced, expectedCount: input.count, windowBits: deflaterWindowBits(format)) == input)
 
-    var consumed = 0
-    let blockedCalls = try measuredAllocations(probe) { () throws(DeflateError) in
-      deflater.reset()
+      var consumed = 0
+      let blockedCalls = try measuredAllocations(probe) { () throws(DeflateError) in
+        deflater.reset()
+        var noOutput = OutputSpan<UInt8>()
+        let blocked = try deflater.process(input: input.span, output: &noOutput, flush: .finish)
+        precondition(blocked.status == .needsOutput)
+        consumed = blocked.inputConsumed
+      }
+      #expect(blockedCalls == 0)
+      // Swift error boxing is outside the allocation guarantee. The reset and
+      // subsequent encoding must still reuse all working storage after failure.
+      var invalidState = false
       var noOutput = OutputSpan<UInt8>()
-      let blocked = try deflater.process(input: input.span, output: &noOutput, flush: .finish)
-      precondition(blocked.status == .needsOutput)
-      consumed = blocked.inputConsumed
+      do throws(DeflateError) {
+        _ = try deflater.process(input: input.span.extracting(droppingFirst: consumed), output: &noOutput, flush: .sync)
+      } catch {
+        if case .invalidState = error { invalidState = true } else { throw error }
+      }
+      let recoveryCalls = try measuredAllocations(probe) { () throws(DeflateError) in
+        deflater.reset()
+        encoded.removeAll()
+        try driveWithoutAllocations(&deflater, input: input.span, flush: .finish, chunk: &chunk, encoded: &encoded)
+      }
+      #expect(recoveryCalls == 0)
+      #expect(invalidState)
+      let recovered = (0..<encoded.count).map { encoded[$0] }
+      #expect(try cZlibInflate(recovered, expectedCount: input.count, windowBits: deflaterWindowBits(format)) == input)
+      totalCalls += calls + syncCalls + blockedCalls + recoveryCalls
     }
-    #expect(blockedCalls == 0)
-    // Swift error boxing is outside the allocation guarantee. The reset and
-    // subsequent encoding must still reuse all working storage after failure.
-    var invalidState = false
-    var noOutput = OutputSpan<UInt8>()
-    do throws(DeflateError) {
-      _ = try deflater.process(input: input.span.extracting(droppingFirst: consumed), output: &noOutput, flush: .sync)
-    } catch {
-      if case .invalidState = error { invalidState = true } else { throw error }
-    }
-    let recoveryCalls = try measuredAllocations(probe) { () throws(DeflateError) in
-      deflater.reset()
-      encoded.removeAll()
-      try driveWithoutAllocations(&deflater, input: input.span, flush: .finish, chunk: &chunk, encoded: &encoded)
-    }
-    #expect(recoveryCalls == 0)
-    #expect(invalidState)
-    let recovered = (0..<encoded.count).map { encoded[$0] }
-    #expect(try cZlibInflate(recovered, expectedCount: input.count, windowBits: deflaterWindowBits(format)) == input)
-    totalCalls += calls + syncCalls + blockedCalls + recoveryCalls
+    print("DEFLATER_ALLOCATIONS format=\(format) strategy=\(strategy) effort=\(effort) calls=\(totalCalls)")
   }
-  print("DEFLATER_ALLOCATIONS format=\(format) strategy=\(strategy) payloads=\(payloads.count) calls=\(totalCalls)")
 }
 #endif
