@@ -21,9 +21,8 @@ public struct Adler32: Sendable {
       // Starting with reduced sums, 5,552 bytes of even 0xFF cannot overflow
       // either UInt32 accumulator. Reduce once per batch instead of per byte.
       let end = offset + min(5_552, input.count - offset)
-      let batch = input.extracting(offset..<end)
-      for byte in batch {
-        sum += UInt32(byte)
+      for index in offset..<end {
+        sum += UInt32(input[index])
         weightedSum += sum
       }
       sum %= 65_521

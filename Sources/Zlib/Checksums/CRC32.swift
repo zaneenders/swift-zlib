@@ -4,13 +4,17 @@
 public struct CRC32: Sendable {
   private var remainder: UInt32 = .max
 
-  private static let table: [UInt32] = (0..<256).map { index in
-    var entry = UInt32(index)
-    for _ in 0..<8 {
-      entry = (entry >> 1) ^ (entry & 1 == 0 ? 0 : 0xEDB8_8320)
+  private static let table: InlineArray<256, UInt32> = {
+    var table = InlineArray<256, UInt32>(repeating: 0)
+    for index in 0..<256 {
+      var entry = UInt32(index)
+      for _ in 0..<8 {
+        entry = (entry >> 1) ^ (entry & 1 == 0 ? 0 : 0xEDB8_8320)
+      }
+      table[index] = entry
     }
-    return entry
-  }
+    return table
+  }()
 
   /// Creates a checksum for an empty byte sequence.
   public init() {}
@@ -23,8 +27,8 @@ public struct CRC32: Sendable {
 
   /// Includes the supplied bytes in the checksum. An empty input has no effect.
   public mutating func update(input: borrowing Span<UInt8>) {
-    for byte in input {
-      update(byte: byte)
+    for index in 0..<input.count {
+      update(byte: input[index])
     }
   }
 

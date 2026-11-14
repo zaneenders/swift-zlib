@@ -21,6 +21,7 @@ private func measureAutomaticBlockCandidate(
   var writer = BitWriter(minimumCapacity: input.count + 256)
   writer.writeBits(0, count: bitPosition)
   var finder = LZ77MatchFinder()
+  var workspace = DeflateWorkspace(maximumTokens: input.count)
   var position = 0
   let isFinal = boundary == .final
   switch strategy {
@@ -32,11 +33,12 @@ private func measureAutomaticBlockCandidate(
       input: input.span, position: &position, end: input.count, isFinal: isFinal, finder: &finder, writer: &writer)
   case .dynamic:
     try DeflateEncoder.writeDynamicBlock(
-      input: input.span, position: &position, end: input.count, isFinal: isFinal, finder: &finder, writer: &writer)
+      input: input.span, position: &position, end: input.count, isFinal: isFinal,
+      finder: &finder, workspace: &workspace, writer: &writer)
   case .automatic:
     try DeflateEncoder.writeAutomaticBlock(
       input: input.span, position: &position, end: input.count, isFinal: isFinal,
-      syncFlush: boundary == .sync, finder: &finder, writer: &writer)
+      syncFlush: boundary == .sync, finder: &finder, workspace: &workspace, writer: &writer)
   }
   #expect(position == input.count)
   switch boundary {
