@@ -111,6 +111,26 @@ func bitWriterPreservesPartialBitsAcrossDrains(bitCount: Int) throws {
   try expectBitWriterBytes(remaining, [0x69, 0xA5, 0x05])
 }
 
+@Test(arguments: 0...8)
+func bitWriterResetDiscardsUndrainedBytesAndPartialBits(bitCount: Int) throws {
+  var writer = BitWriter(minimumCapacity: 1)
+  for byte: UInt8 in [0xB6, 0x69, 0xA5] {
+    writer.writeBits(byte, count: 8)
+  }
+  writer.writeBits(0xFF, count: bitCount)
+  var output = UniqueArray<UInt8>(capacity: 1)
+  let drained = output.edit { span in writer.drain(output: &span) }
+  #expect(!drained)
+
+  writer.reset()
+  #expect(writer.bitPosition == 0)
+  #expect(writer.hasPendingBytes == false)
+  try expectBitWriterBytes(output, [0xB6])
+  writer.writeBits(0b101, count: 3)
+  let remaining = writer.finish()
+  try expectBitWriterBytes(remaining, [0x05])
+}
+
 @Test(arguments: [0, 1, 8])
 func bitWriterFinishesEmptyWithoutProducingBytes(minimumCapacity: Int) throws {
   let writer = BitWriter(minimumCapacity: minimumCapacity)

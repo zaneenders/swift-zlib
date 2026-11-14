@@ -14,6 +14,14 @@ struct BitWriter: ~Copyable {
     self.output = UniqueArray<UInt8>(minimumCapacity: minimumCapacity)
   }
 
+  /// Discards pending output and partial bits, retaining the allocated storage.
+  mutating func reset() {
+    output.removeAll()
+    readOffset = 0
+    currentByte = 0
+    bitOffset = 0
+  }
+
   mutating func writeBit(_ bit: UInt8) throws(BitWriterError) {
     guard bit == 0 || bit == 1 else {
       throw BitWriterError.invalidBit

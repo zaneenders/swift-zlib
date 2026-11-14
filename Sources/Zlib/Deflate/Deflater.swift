@@ -3,6 +3,7 @@
 /// Input is buffered in blocks of up to 65,535 bytes. Compression retains a
 /// 32 KiB history window across blocks and sync flushes. At most one encoded
 /// block awaits output capacity. No caller storage is borrowed between calls.
+/// Use `reset()` to reuse the compressor for a new independent stream.
 public struct Deflater: ~Copyable, ~Sendable {
   public enum Flush: Equatable, Sendable {
     /// Accept input, buffering a partial block until more input arrives.
@@ -58,16 +59,31 @@ public struct Deflater: ~Copyable, ~Sendable {
   public init(format: ZLib.Format = .rawDeflate, strategy: ZLib.Strategy = .automatic) {
     self.format = format
     self.strategy = strategy
-    switch format {
-    case .rawDeflate:
-      break
-    case .zlib:
-      writer.writeBits(0x78, count: 8)
-      writer.writeBits(0x01, count: 8)
-    case .gzip:
-      let header: InlineArray<10, UInt8> = [0x1F, 0x8B, 8, 0, 0, 0, 0, 0, 0, 255]
-      for byte in header { writer.writeBits(byte, count: 8) }
-    }
+    writeHeader()
+  }
+
+  /// Starts a new independent stream with the same format and strategy.
+  ///
+  /// May be called at any time, including after completion or an error. Discards
+  /// buffered input, match history, pending output, and any outstanding flush
+  /// request. Resets checksums and byte counts; the new header is emitted by
+  /// subsequent `process` calls. Bytes already written to caller storage are
+  /// unchanged and belong to the previous stream.
+  ///
+  /// Retains the input and output buffer capacities without allocating. Encoding
+  /// subsequent blocks can still allocate working storage or grow the output buffer.
+  public mutating func reset() {
+    phase = .accepting
+    requestedFlush = .none
+    requestRemaining = 0
+    totalInputCount = 0
+    totalOutputCount = 0
+    buffer.removeAll()
+    historyCount = 0
+    writer.reset()
+    adler = Adler32()
+    crc = CRC32()
+    writeHeader()
   }
 
   /// Appends compressed bytes to the available output capacity.
@@ -79,7 +95,7 @@ public struct Deflater: ~Copyable, ~Sendable {
   /// the unconsumed suffix (including an empty suffix), until `.flushed` or
   /// `.finished`. A pending request cannot be changed or extended with new input.
   /// Empty calls after completion return `.finished`; further input is an error.
-  /// After an error, discard the compressor. Streaming block boundaries and
+  /// After an error, reset or discard the compressor. Streaming block boundaries and
   /// compressed bytes may differ from the one-shot encoder's output.
   public mutating func process(
     input: borrowing Span<UInt8>, output: inout OutputSpan<UInt8>, flush: Flush = .none
@@ -212,6 +228,19 @@ public struct Deflater: ~Copyable, ~Sendable {
     for index in 0..<retained { buffer[index] = buffer[start + index] }
     buffer.removeLast(buffer.count - retained)
     historyCount = retained
+  }
+
+  private mutating func writeHeader() {
+    switch format {
+    case .rawDeflate:
+      break
+    case .zlib:
+      writer.writeBits(0x78, count: 8)
+      writer.writeBits(0x01, count: 8)
+    case .gzip:
+      let header: InlineArray<10, UInt8> = [0x1F, 0x8B, 8, 0, 0, 0, 0, 0, 0, 255]
+      for byte in header { writer.writeBits(byte, count: 8) }
+    }
   }
 
   private mutating func writeTrailer() {
